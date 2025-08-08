@@ -1,0 +1,405 @@
+2025-08-07 11:57:41,813 - server - INFO - Schwab server started on localhost:3457
+2025-08-07 11:57:43,819 - client - INFO - Connected to Schwab server at localhost:3457
+2025-08-07 11:57:43,820 - server - INFO - New client connected from ('127.0.0.1', 65276)
+2025-08-07 11:57:43,821 - server - INFO - Received request from ('127.0.0.1', 65276): ping
+2025-08-07 11:57:43,821 - server - INFO - Received request from ('127.0.0.1', 65276): test_connection
+2025-08-07 11:57:43,822 - server - INFO - Received request from ('127.0.0.1', 65276): invalid_action
+2025-08-07 11:57:43,822 - server - INFO - Received request from ('127.0.0.1', 65276): get_linked_accounts
+2025-08-07 11:57:43,822 - client - INFO - Disconnected from server
+2025-08-07 11:57:43,822 - server - INFO - Stopping Schwab server...
+2025-08-07 11:57:43,822 - server - INFO - Stopping Schwab server...
+2025-08-07 11:57:43,822 - server - INFO - Schwab server stopped
+2025-08-07 11:57:43,822 - server - INFO - Schwab server stopped
+2025-08-07 11:57:43,823 - server - INFO - Client ('127.0.0.1', 65276) disconnected
+2025-08-07 11:59:00,238 - server - INFO - Schwab server started on localhost:3457
+2025-08-07 11:59:02,245 - client - INFO - Connected to Schwab server at localhost:3457
+2025-08-07 11:59:02,247 - server - INFO - New client connected from ('127.0.0.1', 65292)
+2025-08-07 11:59:02,247 - server - INFO - Received request from ('127.0.0.1', 65292): ping
+2025-08-07 11:59:02,247 - server - INFO - Received request from ('127.0.0.1', 65292): test_connection
+2025-08-07 11:59:02,248 - server - INFO - Received request from ('127.0.0.1', 65292): invalid_action
+2025-08-07 11:59:02,248 - server - INFO - Received request from ('127.0.0.1', 65292): get_linked_accounts
+2025-08-07 11:59:02,248 - client - INFO - Disconnected from server
+2025-08-07 11:59:02,248 - server - INFO - Client ('127.0.0.1', 65292) disconnected
+2025-08-07 11:59:02,248 - server - INFO - Stopping Schwab server...
+2025-08-07 11:59:02,249 - server - INFO - Stopping Schwab server...
+2025-08-07 11:59:02,249 - server - INFO - Schwab server stopped
+2025-08-07 11:59:02,249 - server - INFO - Schwab server stopped
+2025-08-07 11:59:43,133 - server - INFO - Schwab server started on localhost:3458
+2025-08-07 11:59:44,138 - client - INFO - Connected to Schwab server at localhost:3458
+2025-08-07 11:59:44,139 - server - INFO - New client connected from ('127.0.0.1', 65299)
+2025-08-07 11:59:44,140 - server - INFO - Received request from ('127.0.0.1', 65299): ping
+2025-08-07 11:59:44,140 - server - INFO - Received request from ('127.0.0.1', 65299): test_connection
+2025-08-07 11:59:44,141 - server - INFO - Received request from ('127.0.0.1', 65299): get_linked_accounts
+2025-08-07 11:59:44,141 - server - INFO - Received request from ('127.0.0.1', 65299): invalid
+2025-08-07 11:59:44,141 - client - INFO - Disconnected from server
+2025-08-07 11:59:44,141 - server - INFO - Client ('127.0.0.1', 65299) disconnected
+2025-08-07 11:59:44,141 - server - INFO - Stopping Schwab server...
+2025-08-07 11:59:44,141 - server - INFO - Stopping Schwab server...
+2025-08-07 11:59:44,141 - server - INFO - Schwab server stopped
+2025-08-07 11:59:44,141 - server - INFO - Schwab server stopped
+2025-08-07 12:02:43,417 - server - INFO - Schwab server started on localhost:3458
+2025-08-07 12:02:44,422 - client - INFO - Connected to Schwab server at localhost:3458
+2025-08-07 12:02:44,423 - server - INFO - New client connected from ('127.0.0.1', 65324)
+2025-08-07 12:02:44,424 - server - INFO - Received request from ('127.0.0.1', 65324): ping
+2025-08-07 12:02:44,425 - server - INFO - Received request from ('127.0.0.1', 65324): test_connection
+2025-08-07 12:02:44,425 - server - INFO - Received request from ('127.0.0.1', 65324): get_linked_accounts
+2025-08-07 12:02:44,425 - server - INFO - Received request from ('127.0.0.1', 65324): invalid
+2025-08-07 12:02:44,426 - client - INFO - Disconnected from server
+2025-08-07 12:02:44,426 - server - INFO - Client ('127.0.0.1', 65324) disconnected
+2025-08-07 12:02:44,426 - server - INFO - Stopping Schwab server...
+2025-08-07 12:02:44,426 - server - INFO - Stopping Schwab server...
+2025-08-07 12:02:44,426 - server - INFO - Schwab server stopped
+2025-08-07 12:02:44,426 - server - INFO - Schwab server stopped
+2025-08-07 12:25:58,892 - json_parser - ERROR - JSON parsing error: Expecting ',' delimiter: line 1 column 18 (char 17)
+2025-08-07 12:25:58,893 - server - INFO - Schwab server started on localhost:3459
+2025-08-07 12:25:59,900 - client - INFO - Connected to Schwab server at localhost:3459
+2025-08-07 12:25:59,901 - server - INFO - New client connected from ('127.0.0.1', 65430)
+2025-08-07 12:25:59,903 - server - INFO - Received request from ('127.0.0.1', 65430): ping
+2025-08-07 12:25:59,904 - server - INFO - Received request from ('127.0.0.1', 65430): test_connection
+2025-08-07 12:25:59,905 - server - INFO - Received request from ('127.0.0.1', 65430): get_linked_accounts
+2025-08-07 12:25:59,905 - server - INFO - Received request from ('127.0.0.1', 65430): get_positions
+2025-08-07 12:25:59,905 - server - INFO - Received request from ('127.0.0.1', 65430): get_positions_by_symbol
+2025-08-07 12:25:59,906 - client - INFO - Disconnected from server
+2025-08-07 12:25:59,906 - server - INFO - Stopping Schwab server...
+2025-08-07 12:25:59,906 - server - INFO - Stopping Schwab server...
+2025-08-07 12:25:59,906 - server - INFO - Schwab server stopped
+2025-08-07 12:25:59,906 - server - INFO - Schwab server stopped
+2025-08-07 12:25:59,906 - json_parser - ERROR - JSON parsing error: Expecting value: line 1 column 1 (char 0)
+2025-08-07 12:25:59,906 - server - INFO - Client ('127.0.0.1', 65430) disconnected
+2025-08-07 12:25:59,906 - json_parser - ERROR - JSON parsing error: Expecting value: line 1 column 11 (char 10)
+2025-08-07 12:33:37,845 - server - INFO - Schwab server started on localhost:3460
+2025-08-07 12:33:38,849 - client - INFO - Connected to Schwab server at localhost:3460
+2025-08-07 12:33:38,849 - server - INFO - New client connected from ('127.0.0.1', 65476)
+2025-08-07 12:33:38,849 - server - INFO - Received request from ('127.0.0.1', 65476): ping
+2025-08-07 12:33:38,850 - server - INFO - Received request from ('127.0.0.1', 65476): get_positions_by_symbol
+2025-08-07 12:33:38,850 - server - INFO - Received request from ('127.0.0.1', 65476): get_account_details
+2025-08-07 12:33:38,850 - client - INFO - Disconnected from server
+2025-08-07 12:33:38,850 - server - INFO - Stopping Schwab server...
+2025-08-07 12:33:38,850 - server - INFO - Client ('127.0.0.1', 65476) disconnected
+2025-08-07 12:33:38,850 - server - INFO - Stopping Schwab server...
+2025-08-07 12:33:38,851 - server - INFO - Schwab server stopped
+2025-08-07 12:33:38,851 - server - INFO - Schwab server stopped
+2025-08-07 16:06:26,339 - server - INFO - Schwab server started on localhost:3461
+2025-08-07 16:06:27,346 - client - INFO - Connected to Schwab server at localhost:3461
+2025-08-07 16:06:27,347 - server - INFO - New client connected from ('127.0.0.1', 49922)
+2025-08-07 16:06:27,347 - server - INFO - Received request from ('127.0.0.1', 49922): ping
+2025-08-07 16:06:27,348 - server - INFO - Received request from ('127.0.0.1', 49922): get_linked_accounts
+2025-08-07 16:06:27,348 - client - INFO - Disconnected from server
+2025-08-07 16:06:27,348 - server - INFO - Client ('127.0.0.1', 49922) disconnected
+2025-08-07 16:06:27,349 - client - INFO - Connected to Schwab server at localhost:3461
+2025-08-07 16:06:27,349 - server - INFO - New client connected from ('127.0.0.1', 49923)
+2025-08-07 16:06:27,349 - server - INFO - Received request from ('127.0.0.1', 49923): initialize_credentials
+2025-08-07 16:06:27,349 - server - INFO - Initializing Schwab API services...
+2025-08-07 16:06:27,349 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 16:06:27,350 - schwab_auth - ERROR - Authentication failed: [Schwabdev] App key or app secret invalid length.
+2025-08-07 16:06:27,350 - schwab_auth - ERROR - Connection test failed: Failed to authenticate with Schwab API: [Schwabdev] App key or app secret invalid length.
+2025-08-07 16:06:27,350 - server - ERROR - Failed to initialize services: Failed to authenticate with Schwab API
+2025-08-07 16:06:27,351 - client - INFO - Disconnected from server
+2025-08-07 16:06:27,352 - server - INFO - Client ('127.0.0.1', 49923) disconnected
+2025-08-07 16:06:27,352 - client - INFO - Connected to Schwab server at localhost:3461
+2025-08-07 16:06:27,352 - server - INFO - New client connected from ('127.0.0.1', 49924)
+2025-08-07 16:06:27,352 - server - INFO - Received request from ('127.0.0.1', 49924): test_connection
+2025-08-07 16:06:27,352 - server - INFO - Received request from ('127.0.0.1', 49924): get_linked_accounts
+2025-08-07 16:06:27,353 - server - INFO - Received request from ('127.0.0.1', 49924): get_positions
+2025-08-07 16:06:27,353 - server - INFO - Received request from ('127.0.0.1', 49924): get_positions_by_symbol
+2025-08-07 16:06:27,353 - server - INFO - Received request from ('127.0.0.1', 49924): get_account_details
+2025-08-07 16:06:27,353 - client - INFO - Disconnected from server
+2025-08-07 16:06:27,353 - server - INFO - Client ('127.0.0.1', 49924) disconnected
+2025-08-07 16:06:27,353 - server - INFO - Stopping Schwab server...
+2025-08-07 16:06:27,353 - server - INFO - Stopping Schwab server...
+2025-08-07 16:06:27,353 - server - INFO - Schwab server stopped
+2025-08-07 16:06:27,354 - server - INFO - Schwab server stopped
+2025-08-07 16:08:18,601 - server - INFO - Schwab server started on localhost:3456
+2025-08-07 16:08:43,118 - server - INFO - Received signal 2, shutting down...
+2025-08-07 16:08:43,118 - server - INFO - Stopping Schwab server...
+2025-08-07 16:08:43,118 - server - INFO - Schwab server stopped
+2025-08-07 16:08:43,118 - server - INFO - Stopping Schwab server...
+2025-08-07 16:08:43,118 - server - INFO - Schwab server stopped
+2025-08-07 16:17:18,150 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 16:17:18,150 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 16:17:18,152 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 16:17:27,965 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 16:17:27,966 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:17:27,966 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:17:27,966 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:17:27,966 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:17:27,966 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:17:27,966 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:17:41,831 - __main__ - INFO - Valid tokens found - initializing server with existing tokens...
+2025-08-07 16:17:41,831 - __main__ - INFO - Initializing Schwab API services with existing tokens...
+2025-08-07 16:17:41,831 - schwab_auth - INFO - Using tokens-only mode with placeholder credentials
+2025-08-07 16:17:41,831 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 16:17:41,831 - schwab_auth - ERROR - Authentication failed: [Schwabdev] App key or app secret invalid length.
+2025-08-07 16:17:41,831 - schwab_auth - ERROR - Connection test failed: Failed to authenticate with Schwab API: [Schwabdev] App key or app secret invalid length.
+2025-08-07 16:17:41,831 - __main__ - ERROR - Failed to initialize services with tokens: Failed to authenticate with existing tokens
+2025-08-07 16:17:41,831 - __main__ - ERROR - Failed to initialize with tokens: Failed to authenticate with existing tokens
+2025-08-07 16:17:41,831 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 16:17:41,833 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 16:17:46,675 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 16:17:46,675 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:17:46,675 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:17:46,676 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:17:46,676 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:17:46,676 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:17:46,676 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:18:02,935 - __main__ - INFO - Valid tokens found - initializing server with existing tokens...
+2025-08-07 16:18:02,935 - __main__ - INFO - Initializing Schwab API services with existing tokens...
+2025-08-07 16:18:02,935 - schwab_auth - INFO - Using tokens-only mode with placeholder credentials
+2025-08-07 16:18:02,935 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 16:18:02,935 - Schwabdev - INFO - Access token expires in 00H:11M:57S
+2025-08-07 16:18:02,935 - Schwabdev - INFO - Refresh token expires in 167H:41M:57S
+2025-08-07 16:18:02,935 - Schwabdev - INFO - Client Initialization Complete
+2025-08-07 16:18:02,935 - schwab_auth - INFO - Successfully authenticated with Schwab API
+2025-08-07 16:18:03,214 - __main__ - ERROR - Failed to initialize services with tokens: Failed to authenticate with existing tokens
+2025-08-07 16:18:03,214 - __main__ - ERROR - Failed to initialize with tokens: Failed to authenticate with existing tokens
+2025-08-07 16:18:03,214 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 16:18:03,214 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 16:18:07,748 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 16:18:07,748 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:18:07,748 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:18:07,748 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:18:07,748 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:18:07,748 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:18:07,748 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:32:47,837 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 16:32:47,837 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 16:32:47,840 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 16:32:52,614 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 16:32:52,615 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:32:52,615 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:32:52,615 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:32:52,615 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:32:52,615 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:32:52,615 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:34:20,668 - __main__ - INFO - Initializing server with environment credentials...
+2025-08-07 16:34:20,668 - __main__ - INFO - Initializing Schwab API services...
+2025-08-07 16:34:20,668 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 16:34:20,669 - Schwabdev - INFO - The access token has expired, updating automatically.
+2025-08-07 16:34:21,258 - Schwabdev - ERROR - 
+               {
+                    "error": "invalid_client",
+                    "error_description": "Unauthorized"
+                }
+            
+2025-08-07 16:34:21,258 - Schwabdev - ERROR - Could not get new access token; refresh_token likely invalid.
+2025-08-07 16:34:21,258 - Schwabdev - INFO - Access token expires in -00H:04M:21S
+2025-08-07 16:34:21,258 - Schwabdev - INFO - Refresh token expires in 167H:25M:38S
+2025-08-07 16:34:21,258 - Schwabdev - INFO - The access token has expired, updating automatically.
+2025-08-07 16:34:21,258 - Schwabdev - INFO - Client Initialization Complete
+2025-08-07 16:34:21,259 - schwab_auth - INFO - Successfully authenticated with Schwab API
+2025-08-07 16:34:21,400 - Schwabdev - ERROR - 
+               {
+                    "error": "invalid_client",
+                    "error_description": "Unauthorized"
+                }
+            
+2025-08-07 16:34:21,400 - Schwabdev - ERROR - Could not get new access token; refresh_token likely invalid.
+2025-08-07 16:34:21,462 - __main__ - ERROR - Failed to initialize services: Failed to authenticate with Schwab API
+2025-08-07 16:34:21,462 - __main__ - ERROR - Server startup error: Failed to authenticate with Schwab API
+2025-08-07 16:34:21,462 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:34:21,462 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:34:29,924 - server - INFO - Initializing Schwab API services...
+2025-08-07 16:34:29,925 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 16:34:29,925 - Schwabdev - INFO - The access token has expired, updating automatically.
+2025-08-07 16:34:30,113 - Schwabdev - ERROR - 
+               {
+                    "error": "invalid_client",
+                    "error_description": "Unauthorized"
+                }
+            
+2025-08-07 16:34:30,113 - Schwabdev - ERROR - Could not get new access token; refresh_token likely invalid.
+2025-08-07 16:34:30,113 - Schwabdev - INFO - Access token expires in -00H:04M:30S
+2025-08-07 16:34:30,113 - Schwabdev - INFO - Refresh token expires in 167H:25M:29S
+2025-08-07 16:34:30,114 - Schwabdev - INFO - The access token has expired, updating automatically.
+2025-08-07 16:34:30,114 - Schwabdev - INFO - Client Initialization Complete
+2025-08-07 16:34:30,114 - schwab_auth - INFO - Successfully authenticated with Schwab API
+2025-08-07 16:34:30,269 - server - ERROR - Failed to initialize services: Failed to authenticate with Schwab API
+2025-08-07 16:48:20,549 - __main__ - INFO - Initializing server with environment credentials...
+2025-08-07 16:48:20,549 - __main__ - INFO - Initializing Schwab API services...
+2025-08-07 16:48:20,549 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 16:48:20,550 - Schwabdev - INFO - The access token has expired, updating automatically.
+2025-08-07 16:48:21,171 - Schwabdev - INFO - Access token updated: 2025-08-07 20:48:21.170045+00:00
+2025-08-07 16:48:21,172 - Schwabdev - INFO - Access token expires in 00H:29M:59S
+2025-08-07 16:48:21,172 - Schwabdev - INFO - Refresh token expires in 115H:43M:42S
+2025-08-07 16:48:21,172 - Schwabdev - INFO - Client Initialization Complete
+2025-08-07 16:48:21,173 - schwab_auth - INFO - Successfully authenticated with Schwab API
+2025-08-07 16:48:21,556 - __main__ - INFO - Schwab API services initialized successfully
+2025-08-07 16:48:21,557 - __main__ - INFO - Server initialized with environment credentials
+2025-08-07 16:48:21,557 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 16:52:29,464 - __main__ - INFO - New client connected from ('127.0.0.1', 50205)
+2025-08-07 16:52:29,464 - __main__ - INFO - Received request from ('127.0.0.1', 50205): ping
+2025-08-07 16:52:29,464 - __main__ - INFO - Received request from ('127.0.0.1', 50205): test_connection
+2025-08-07 16:52:29,678 - __main__ - INFO - Client ('127.0.0.1', 50205) disconnected
+2025-08-07 16:54:04,412 - __main__ - INFO - New client connected from ('127.0.0.1', 50210)
+2025-08-07 16:54:04,412 - __main__ - INFO - Received request from ('127.0.0.1', 50210): ping
+2025-08-07 16:54:04,412 - __main__ - INFO - Received request from ('127.0.0.1', 50210): test_connection
+2025-08-07 16:54:04,714 - __main__ - INFO - Client ('127.0.0.1', 50210) disconnected
+2025-08-07 16:54:41,141 - __main__ - INFO - Received signal 2, shutting down...
+2025-08-07 16:54:41,142 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:54:41,142 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:54:41,142 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:54:41,142 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:54:41,142 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:54:41,142 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:55:17,376 - __main__ - INFO - Initializing server with environment credentials...
+2025-08-07 16:55:17,376 - __main__ - INFO - Initializing Schwab API services...
+2025-08-07 16:55:17,376 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 16:55:17,377 - Schwabdev - INFO - Access token expires in 00H:23M:03S
+2025-08-07 16:55:17,377 - Schwabdev - INFO - Refresh token expires in 115H:36M:46S
+2025-08-07 16:55:17,377 - Schwabdev - INFO - Client Initialization Complete
+2025-08-07 16:55:17,377 - schwab_auth - INFO - Successfully authenticated with Schwab API
+2025-08-07 16:55:17,725 - __main__ - INFO - Schwab API services initialized successfully
+2025-08-07 16:55:17,725 - __main__ - INFO - Server initialized with environment credentials
+2025-08-07 16:55:17,727 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 16:55:28,012 - __main__ - INFO - New client connected from ('127.0.0.1', 50218)
+2025-08-07 16:55:28,013 - __main__ - INFO - Received request from ('127.0.0.1', 50218): ping
+2025-08-07 16:55:28,013 - __main__ - INFO - Received request from ('127.0.0.1', 50218): test_connection
+2025-08-07 16:55:28,269 - __main__ - INFO - Client ('127.0.0.1', 50218) disconnected
+2025-08-07 16:55:59,238 - __main__ - INFO - New client connected from ('127.0.0.1', 50219)
+2025-08-07 16:55:59,238 - __main__ - INFO - Received request from ('127.0.0.1', 50219): ping
+2025-08-07 16:55:59,238 - __main__ - INFO - Received request from ('127.0.0.1', 50219): test_connection
+2025-08-07 16:55:59,610 - __main__ - INFO - Client ('127.0.0.1', 50219) disconnected
+2025-08-07 16:56:16,622 - __main__ - INFO - Received signal 2, shutting down...
+2025-08-07 16:56:16,622 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:56:16,622 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:56:16,622 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:56:16,622 - __main__ - INFO - Schwab server stopped
+2025-08-07 16:56:16,622 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 16:56:16,623 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:11:50,320 - __main__ - INFO - Initializing server with environment credentials...
+2025-08-07 17:11:50,320 - __main__ - INFO - Initializing Schwab API services...
+2025-08-07 17:11:50,320 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 17:11:50,321 - Schwabdev - INFO - Access token expires in 00H:06M:30S
+2025-08-07 17:11:50,321 - Schwabdev - INFO - Refresh token expires in 115H:20M:13S
+2025-08-07 17:11:50,321 - Schwabdev - INFO - Client Initialization Complete
+2025-08-07 17:11:50,321 - schwab_auth - INFO - Successfully authenticated with Schwab API
+2025-08-07 17:11:50,660 - __main__ - INFO - Schwab API services initialized successfully
+2025-08-07 17:11:50,660 - __main__ - INFO - Server initialized with environment credentials
+2025-08-07 17:11:50,660 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:11:55,093 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:11:55,093 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:11:55,093 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:11:55,093 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:11:55,093 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:11:55,093 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:11:55,093 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:18:32,852 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:18:32,852 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:18:32,853 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:18:42,623 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:18:42,625 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:18:42,625 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:18:42,625 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:18:42,625 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:18:42,625 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:18:42,625 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:18:54,507 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:18:54,508 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:18:54,509 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:18:56,374 - __main__ - INFO - New client connected from ('127.0.0.1', 50631)
+2025-08-07 17:18:56,375 - __main__ - INFO - Received request from ('127.0.0.1', 50631): ping
+2025-08-07 17:18:56,375 - __main__ - INFO - Client ('127.0.0.1', 50631) disconnected
+2025-08-07 17:18:56,380 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:18:56,380 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:18:56,380 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:18:56,380 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:18:56,380 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:19:09,993 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:19:09,994 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:19:09,997 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:19:11,771 - __main__ - INFO - New client connected from ('127.0.0.1', 50635)
+2025-08-07 17:19:11,772 - __main__ - INFO - Received request from ('127.0.0.1', 50635): get_account_details
+2025-08-07 17:19:11,772 - __main__ - INFO - Client ('127.0.0.1', 50635) disconnected
+2025-08-07 17:19:11,777 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:19:11,777 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:19:11,777 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:19:11,777 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:19:11,778 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:32:41,232 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:32:41,233 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:32:41,235 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:32:59,525 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:32:59,526 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:32:59,527 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:33:01,373 - __main__ - INFO - New client connected from ('127.0.0.1', 50706)
+2025-08-07 17:33:01,373 - __main__ - INFO - Received request from ('127.0.0.1', 50706): ping
+2025-08-07 17:33:01,374 - __main__ - INFO - Client ('127.0.0.1', 50706) disconnected
+2025-08-07 17:33:01,378 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:33:01,378 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:01,378 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:33:10,601 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:33:10,601 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:33:10,602 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:33:12,490 - __main__ - INFO - New client connected from ('127.0.0.1', 50708)
+2025-08-07 17:33:12,490 - __main__ - INFO - Received request from ('127.0.0.1', 50708): get_account_details
+2025-08-07 17:33:12,490 - __main__ - INFO - Client ('127.0.0.1', 50708) disconnected
+2025-08-07 17:33:12,495 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:33:12,496 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:12,496 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:33:12,496 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:12,496 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:33:22,300 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:33:22,301 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:33:22,302 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:33:24,092 - __main__ - INFO - New client connected from ('127.0.0.1', 50710)
+2025-08-07 17:33:24,092 - __main__ - INFO - Received request from ('127.0.0.1', 50710): ping
+2025-08-07 17:33:24,092 - __main__ - INFO - Client ('127.0.0.1', 50710) disconnected
+2025-08-07 17:33:24,097 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:33:24,097 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:24,097 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:33:24,097 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:42,391 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:33:42,391 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:33:42,393 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:33:44,174 - __main__ - INFO - New client connected from ('127.0.0.1', 50712)
+2025-08-07 17:33:44,174 - __main__ - INFO - Received request from ('127.0.0.1', 50712): ping
+2025-08-07 17:33:44,174 - __main__ - INFO - Client ('127.0.0.1', 50712) disconnected
+2025-08-07 17:33:44,180 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:33:44,180 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:44,180 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:33:54,414 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:33:54,414 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:33:54,416 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:33:56,258 - __main__ - INFO - New client connected from ('127.0.0.1', 50717)
+2025-08-07 17:33:56,258 - __main__ - INFO - Received request from ('127.0.0.1', 50717): get_account_details
+2025-08-07 17:33:56,259 - __main__ - INFO - Client ('127.0.0.1', 50717) disconnected
+2025-08-07 17:33:56,264 - __main__ - INFO - Received signal 15, shutting down...
+2025-08-07 17:33:56,264 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:56,264 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:33:56,264 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:56,264 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:33:56,264 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:33:56,264 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:40:31,358 - __main__ - INFO - No credentials or valid tokens found.
+2025-08-07 17:40:31,358 - __main__ - INFO - Server starting without credentials. Use 'initialize_credentials' action to set them.
+2025-08-07 17:40:31,359 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:40:38,534 - __main__ - INFO - Received signal 2, shutting down...
+2025-08-07 17:40:38,535 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:40:38,535 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:40:38,535 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:40:38,535 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:40:38,535 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:40:38,535 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:41:14,485 - __main__ - INFO - Initializing server with environment credentials...
+2025-08-07 17:41:14,486 - __main__ - INFO - Initializing Schwab API services...
+2025-08-07 17:41:14,486 - schwab_auth - INFO - Authenticating with Schwab API...
+2025-08-07 17:41:14,486 - Schwabdev - INFO - The access token has expired, updating automatically.
+2025-08-07 17:41:15,177 - Schwabdev - INFO - Access token updated: 2025-08-07 21:41:15.176368+00:00
+2025-08-07 17:41:15,178 - Schwabdev - INFO - Access token expires in 00H:29M:59S
+2025-08-07 17:41:15,178 - Schwabdev - INFO - Refresh token expires in 114H:50M:48S
+2025-08-07 17:41:15,178 - Schwabdev - INFO - Client Initialization Complete
+2025-08-07 17:41:15,178 - schwab_auth - INFO - Successfully authenticated with Schwab API
+2025-08-07 17:41:15,491 - __main__ - INFO - Schwab API services initialized successfully
+2025-08-07 17:41:15,491 - __main__ - INFO - Server initialized with environment credentials
+2025-08-07 17:41:15,492 - __main__ - INFO - Schwab server started on localhost:3456
+2025-08-07 17:41:22,380 - __main__ - INFO - New client connected from ('127.0.0.1', 50752)
+2025-08-07 17:41:22,381 - __main__ - INFO - Received request from ('127.0.0.1', 50752): get_account_details
+2025-08-07 17:41:22,757 - account_service - INFO - Retrieved details for all accounts
+2025-08-07 17:41:22,760 - __main__ - INFO - Client ('127.0.0.1', 50752) disconnected
+2025-08-07 17:44:34,412 - __main__ - INFO - Received signal 2, shutting down...
+2025-08-07 17:44:34,414 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:44:34,414 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:44:34,414 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:44:34,414 - __main__ - INFO - Schwab server stopped
+2025-08-07 17:44:34,414 - __main__ - INFO - Stopping Schwab server...
+2025-08-07 17:44:34,414 - __main__ - INFO - Schwab server stopped

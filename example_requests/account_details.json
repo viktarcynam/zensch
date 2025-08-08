@@ -1,0 +1,4 @@
+{
+  "action": "get_account_details",
+  "include_positions": false
+}
