@@ -27,54 +27,33 @@ def main():
 
         # Example 1: Specific symbol, expiry, and strike
         logger.info("\nExample 1: Get option quote for a specific symbol, expiry, and strike")
-        response = client.send_request({
-            "action": "get_option_quote",
-            "symbol": "AAPL",
-            "expiry": "20241220",  # yyyymmdd format
-            "strike": 190
-        })
+        response = client.get_option_quote(symbol="AAPL", expiry="20241220", strike=190)
         print_response(response)
 
         # Example 2: Default strike, specific expiry
         logger.info("\nExample 2: Get option quote with default (at-the-money) strike")
-        response = client.send_request({
-            "action": "get_option_quote",
-            "symbol": "MSFT",
-            "expiry": "1220"  # mmdd format
-        })
+        response = client.get_option_quote(symbol="MSFT", expiry="1220")
         print_response(response)
 
         # Example 3: Default expiry, specific strike
         logger.info("\nExample 3: Get option quote with default expiry (next Friday)")
-        response = client.send_request({
-            "action": "get_option_quote",
-            "symbol": "NVDA",
-            "strike": 800
-        })
+        response = client.get_option_quote(symbol="NVDA", strike=800)
         print_response(response)
 
         # Example 4: Default expiry and strike
         logger.info("\nExample 4: Get option quote with default expiry and strike")
-        response = client.send_request({
-            "action": "get_option_quote",
-            "symbol": "TSLA"
-        })
+        response = client.get_option_quote(symbol="TSLA")
         print_response(response)
 
         # Example 5: 'dd' date format
         logger.info("\nExample 5: Using 'dd' for expiry date")
-        response = client.send_request({
-            "action": "get_option_quote",
-            "symbol": "GOOG",
-            "expiry": "20", # Assumes the 20th of the current or next month
-            "strike": 140
-        })
+        response = client.get_option_quote(symbol="GOOG", expiry="20", strike=140)
         print_response(response)
 
         # Example 6: Fully defaulted (no arguments)
         logger.info("\nExample 6: Get option quote with no arguments")
         logger.info("This will use the last successful request's parameters (from Example 5).")
-        response = client.send_request({"action": "get_option_quote"})
+        response = client.get_option_quote()
         print_response(response)
 
 
