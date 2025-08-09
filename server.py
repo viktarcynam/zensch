@@ -363,9 +363,6 @@ class SchwabServer:
 
             elif action == 'get_option_quote':
                 symbol = request.get('symbol')
-                if not symbol:
-                    return {'success': False, 'error': 'Missing required parameter: symbol', 'timestamp': timestamp}
-
                 expiry = request.get('expiry')
                 strike = request.get('strike')
 
