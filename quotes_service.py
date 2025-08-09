@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger('quotes_service')
 
 # Import streaming service for real-time data
-from streaming_service import streaming_service
+# from streaming_service import streaming_service
 
 class QuotesService:
     """Service for handling stock quote requests."""
@@ -38,8 +38,7 @@ class QuotesService:
     
     def get_quotes(self, symbols: Union[List[str], str], 
                   fields: Optional[str] = "all", 
-                  indicative: bool = False,
-                  use_streaming: bool = False) -> Dict[str, Any]:
+                  indicative: bool = False) -> Dict[str, Any]:
         """
         Get quotes for specified symbols.
         
@@ -47,7 +46,6 @@ class QuotesService:
             symbols: List of symbols or comma-separated string of symbols
             fields: Fields to include in the quote ("all", "quote", or "fundamental")
             indicative: Whether to return indicative quotes
-            use_streaming: Whether to use streaming data if available (default: False)
             
         Returns:
             Dictionary with quote results or error information
@@ -75,34 +73,34 @@ class QuotesService:
             
             # Add symbols to streaming subscriptions for future use (non-blocking)
             # Only if streaming service is available and client is authenticated
-            try:
-                import threading
-                def add_streaming_subscriptions():
-                    try:
-                        for symbol in symbols:
-                            result = streaming_service.add_stock_subscription(symbol)
-                            if result.get('success'):
-                                logger.info(f"Added {symbol} to streaming subscriptions")
-                            else:
-                                logger.debug(f"Could not add {symbol} to streaming: {result.get('error')}")
-                    except Exception as e:
-                        logger.debug(f"Streaming not available: {str(e)}")
+            # try:
+            #     import threading
+            #     def add_streaming_subscriptions():
+            #         try:
+            #             for symbol in symbols:
+            #                 result = streaming_service.add_stock_subscription(symbol)
+            #                 if result.get('success'):
+            #                     logger.info(f"Added {symbol} to streaming subscriptions")
+            #                 else:
+            #                     logger.debug(f"Could not add {symbol} to streaming: {result.get('error')}")
+            #         except Exception as e:
+            #             logger.debug(f"Streaming not available: {str(e)}")
                 
-                # Run in background thread to avoid blocking the quote request
-                threading.Thread(target=add_streaming_subscriptions, daemon=True).start()
-            except Exception as e:
-                logger.debug(f"Streaming service not available: {str(e)}")
+            #     # Run in background thread to avoid blocking the quote request
+            #     threading.Thread(target=add_streaming_subscriptions, daemon=True).start()
+            # except Exception as e:
+            #     logger.debug(f"Streaming service not available: {str(e)}")
             
-            # Check if we should use streaming data
-            if use_streaming and len(symbols) == 1:
-                # For single symbol requests, try to get streaming data first
-                streaming_data = streaming_service.get_stock_data(symbols[0])
+            # # Check if we should use streaming data
+            # if use_streaming and len(symbols) == 1:
+            #     # For single symbol requests, try to get streaming data first
+            #     streaming_data = streaming_service.get_stock_data(symbols[0])
                 
-                if streaming_data.get('success') and streaming_data.get('data', {}).get('source') == 'streaming':
-                    logger.info(f"Using streaming data for {symbols[0]}")
-                    return streaming_data
-                else:
-                    logger.info(f"Streaming data not available for {symbols[0]}, using quote API")
+            #     if streaming_data.get('success') and streaming_data.get('data', {}).get('source') == 'streaming':
+            #         logger.info(f"Using streaming data for {symbols[0]}")
+            #         return streaming_data
+            #     else:
+            #         logger.info(f"Streaming data not available for {symbols[0]}, using quote API")
             
             # If streaming data not available or not requested, use regular quotes API
             quotes_response = self.schwab_client.quotes(
@@ -153,14 +151,14 @@ class QuotesService:
         # Optional parameters with defaults
         fields = request_data.get('fields', 'all')
         indicative = request_data.get('indicative', False)
-        use_streaming = request_data.get('use_streaming', False)
+        # use_streaming = request_data.get('use_streaming', False)
         
         # Convert string boolean to actual boolean if needed
         if isinstance(indicative, str):
             indicative = indicative.lower() == 'true'
         
-        if isinstance(use_streaming, str):
-            use_streaming = use_streaming.lower() == 'true'
+        # if isinstance(use_streaming, str):
+        #     use_streaming = use_streaming.lower() == 'true'
             
         # Validate fields parameter
         if fields not in ["all", "quote", "fundamental"]:
@@ -174,8 +172,7 @@ class QuotesService:
             "validated_params": {
                 "symbols": request_data['symbols'],
                 "fields": fields,
-                "indicative": indicative,
-                "use_streaming": use_streaming
+                "indicative": indicative
             }
         }
 

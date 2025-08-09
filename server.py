@@ -89,14 +89,14 @@ class SchwabServer:
             options_service.set_client(self.authenticator.client)
             stock_orders_service.set_client(self.authenticator.client)
             option_orders_service.set_client(self.authenticator.client)
-            streaming_service.set_client(self.authenticator.client)
+            # streaming_service.set_client(self.authenticator.client)
             
             # Start streaming service
-            streaming_result = streaming_service.start_streaming()
-            if streaming_result.get('success'):
-                logger.info("Streaming service started successfully")
-            else:
-                logger.warning(f"Failed to start streaming service: {streaming_result.get('error')}")
+            # streaming_result = streaming_service.start_streaming()
+            # if streaming_result.get('success'):
+            #     logger.info("Streaming service started successfully")
+            # else:
+            #     logger.warning(f"Failed to start streaming service: {streaming_result.get('error')}")
             
             logger.info("Schwab API services initialized successfully")
             
