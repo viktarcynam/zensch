@@ -61,15 +61,15 @@ def print_response(response):
     """Print a formatted response."""
     if response.get('success'):
         logger.info("Request successful")
-        # Print first part of data to avoid overwhelming output
-        data = response.get('data', {})
-        if isinstance(data, list) and len(data) > 0:
-            logger.info(f"Received {len(data)} quote(s)")
-            # Print first quote as sample
-            logger.info(f"Sample quote: {json.dumps(data[0], indent=2)[:500]}...")
-        elif isinstance(data, dict):
-            # Print first 500 chars of the data
-            logger.info(f"Data: {json.dumps(data, indent=2)[:500]}...")
+        data = response.get('data', [])
+        if isinstance(data, list):
+            logger.info(f"Received {len(data)} quote(s):")
+            for item in data:
+                logger.info(f"  - {item}")
+        elif isinstance(data, str):
+            logger.info(f"Data: {data}")
+        else:
+            logger.info(f"Data: {json.dumps(data, indent=2)}")
     else:
         logger.error(f"Request failed: {response.get('error')}")
 
