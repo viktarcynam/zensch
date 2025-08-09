@@ -375,6 +375,366 @@ class SchwabClient:
             Dict containing server response
         """
         return self.send_request(filename, *additional_args)
+        
+    def get_quotes(self, symbols, fields: str = "all", indicative: bool = False) -> Dict[str, Any]:
+        """
+        Get quotes for specified symbols.
+        
+        Args:
+            symbols: List of symbols or comma-separated string of symbols
+            fields: Fields to include in the quote ("all", "quote", or "fundamental")
+            indicative: Whether to return indicative quotes
+            
+        Returns:
+            Dict containing quote results
+        """
+        request = {
+            'action': 'get_quotes',
+            'symbols': symbols,
+            'fields': fields,
+            'indicative': indicative
+        }
+        
+        return self.send_request(request)
+    
+    def get_option_chains(self, symbol: str, **kwargs) -> Dict[str, Any]:
+        """
+        Get option chains for a specified symbol.
+        
+        Args:
+            symbol: Symbol to get option chain for (e.g., "AAPL", "$SPX")
+            **kwargs: Additional parameters for the option chain request
+                - contractType: "ALL", "CALL", or "PUT"
+                - strikeCount: Number of strikes
+                - includeUnderlyingQuote: Boolean to include underlying quote
+                - strategy: Strategy type (SINGLE, ANALYTICAL, etc.)
+                - interval: Interval value
+                - strike: Strike price
+                - range: Range type (ITM, ATM, OTM, etc.)
+                - fromDate: Start date (datetime or "yyyy-MM-dd")
+                - toDate: End date (datetime or "yyyy-MM-dd")
+                - volatility: Volatility value
+                - underlyingPrice: Underlying price
+                - interestRate: Interest rate
+                - daysToExpiration: Days to expiration
+                - expMonth: Expiration month (JAN, FEB, etc.)
+                - optionType: Option type
+                - entitlement: Entitlement type (PN, NP, PP)
+            
+        Returns:
+            Dict containing option chain results
+        """
+        request = {
+            'action': 'get_option_chains',
+            'symbol': symbol
+        }
+        
+        # Add all kwargs to the request
+        for key, value in kwargs.items():
+            request[key] = value
+        
+        return self.send_request(request)
+        
+    # Stock Order Methods
+    
+    def place_stock_order(self, account_id: str, symbol: str, quantity: int, 
+                         side: str, order_type: str = "MARKET", 
+                         price: float = None, stop_price: float = None,
+                         duration: str = "DAY", session: str = "NORMAL") -> Dict[str, Any]:
+        """
+        Place a stock order.
+        
+        Args:
+            account_id: Account ID to place the order for
+            symbol: Stock symbol
+            quantity: Number of shares
+            side: Order side (BUY, SELL, BUY_TO_COVER, SELL_SHORT)
+            order_type: Order type (MARKET, LIMIT, STOP, STOP_LIMIT, TRAILING_STOP)
+            price: Limit price (required for LIMIT and STOP_LIMIT orders)
+            stop_price: Stop price (required for STOP and STOP_LIMIT orders)
+            duration: Order duration (DAY, GOOD_TILL_CANCEL, FILL_OR_KILL)
+            session: Order session (NORMAL, AM, PM, SEAMLESS)
+            
+        Returns:
+            Dict containing order result
+        """
+        request = {
+            'action': 'place_stock_order',
+            'account_id': account_id,
+            'symbol': symbol,
+            'quantity': quantity,
+            'side': side,
+            'order_type': order_type,
+            'duration': duration,
+            'session': session
+        }
+        
+        if price is not None:
+            request['price'] = price
+            
+        if stop_price is not None:
+            request['stop_price'] = stop_price
+        
+        return self.send_request(request)
+    
+    def cancel_stock_order(self, account_id: str, order_id: str) -> Dict[str, Any]:
+        """
+        Cancel a stock order.
+        
+        Args:
+            account_id: Account ID the order belongs to
+            order_id: Order ID to cancel
+            
+        Returns:
+            Dict containing cancellation result
+        """
+        request = {
+            'action': 'cancel_stock_order',
+            'account_id': account_id,
+            'order_id': order_id
+        }
+        
+        return self.send_request(request)
+    
+    def replace_stock_order(self, account_id: str, order_id: str, 
+                           symbol: str, quantity: int, side: str,
+                           order_type: str = "MARKET", price: float = None,
+                           stop_price: float = None, duration: str = "DAY",
+                           session: str = "NORMAL") -> Dict[str, Any]:
+        """
+        Replace (modify) a stock order.
+        
+        Args:
+            account_id: Account ID the order belongs to
+            order_id: Order ID to replace
+            symbol: Stock symbol
+            quantity: New quantity of shares
+            side: New order side (BUY, SELL, BUY_TO_COVER, SELL_SHORT)
+            order_type: New order type (MARKET, LIMIT, STOP, STOP_LIMIT, TRAILING_STOP)
+            price: New limit price (required for LIMIT and STOP_LIMIT orders)
+            stop_price: New stop price (required for STOP and STOP_LIMIT orders)
+            duration: New order duration (DAY, GOOD_TILL_CANCEL, FILL_OR_KILL)
+            session: New order session (NORMAL, AM, PM, SEAMLESS)
+            
+        Returns:
+            Dict containing replacement result
+        """
+        request = {
+            'action': 'replace_stock_order',
+            'account_id': account_id,
+            'order_id': order_id,
+            'symbol': symbol,
+            'quantity': quantity,
+            'side': side,
+            'order_type': order_type,
+            'duration': duration,
+            'session': session
+        }
+        
+        if price is not None:
+            request['price'] = price
+            
+        if stop_price is not None:
+            request['stop_price'] = stop_price
+        
+        return self.send_request(request)
+    
+    def get_stock_order_details(self, account_id: str, order_id: str) -> Dict[str, Any]:
+        """
+        Get details of a specific stock order.
+        
+        Args:
+            account_id: Account ID the order belongs to
+            order_id: Order ID to get details for
+            
+        Returns:
+            Dict containing order details
+        """
+        request = {
+            'action': 'get_stock_order_details',
+            'account_id': account_id,
+            'order_id': order_id
+        }
+        
+        return self.send_request(request)
+    
+    def get_stock_orders(self, account_id: str, status: str = None) -> Dict[str, Any]:
+        """
+        Get all stock orders for an account, optionally filtered by status.
+        
+        Args:
+            account_id: Account ID to get orders for
+            status: Optional status filter (OPEN, FILLED, CANCELLED, etc.)
+            
+        Returns:
+            Dict containing orders
+        """
+        request = {
+            'action': 'get_stock_orders',
+            'account_id': account_id
+        }
+        
+        if status:
+            request['status'] = status
+        
+        return self.send_request(request)
+    
+    # Option Order Methods
+    
+    def place_option_order(self, account_id: str, symbol: str, option_type: str,
+                          expiration_date: str, strike_price: float, quantity: int,
+                          side: str, order_type: str = "MARKET", price: float = None,
+                          stop_price: float = None, duration: str = "DAY",
+                          session: str = "NORMAL") -> Dict[str, Any]:
+        """
+        Place an option order.
+        
+        Args:
+            account_id: Account ID to place the order for
+            symbol: Underlying stock symbol
+            option_type: Option type (CALL or PUT)
+            expiration_date: Option expiration date in format YYYY-MM-DD
+            strike_price: Option strike price
+            quantity: Number of contracts
+            side: Order side (BUY_TO_OPEN, SELL_TO_OPEN, BUY_TO_CLOSE, SELL_TO_CLOSE)
+            order_type: Order type (MARKET, LIMIT, STOP, STOP_LIMIT)
+            price: Limit price (required for LIMIT and STOP_LIMIT orders)
+            stop_price: Stop price (required for STOP and STOP_LIMIT orders)
+            duration: Order duration (DAY, GOOD_TILL_CANCEL, FILL_OR_KILL)
+            session: Order session (NORMAL, AM, PM, SEAMLESS)
+            
+        Returns:
+            Dict containing order result
+        """
+        request = {
+            'action': 'place_option_order',
+            'account_id': account_id,
+            'symbol': symbol,
+            'option_type': option_type,
+            'expiration_date': expiration_date,
+            'strike_price': strike_price,
+            'quantity': quantity,
+            'side': side,
+            'order_type': order_type,
+            'duration': duration,
+            'session': session
+        }
+        
+        if price is not None:
+            request['price'] = price
+            
+        if stop_price is not None:
+            request['stop_price'] = stop_price
+        
+        return self.send_request(request)
+    
+    def cancel_option_order(self, account_id: str, order_id: str) -> Dict[str, Any]:
+        """
+        Cancel an option order.
+        
+        Args:
+            account_id: Account ID the order belongs to
+            order_id: Order ID to cancel
+            
+        Returns:
+            Dict containing cancellation result
+        """
+        request = {
+            'action': 'cancel_option_order',
+            'account_id': account_id,
+            'order_id': order_id
+        }
+        
+        return self.send_request(request)
+    
+    def replace_option_order(self, account_id: str, order_id: str, symbol: str,
+                            option_type: str, expiration_date: str, strike_price: float,
+                            quantity: int, side: str, order_type: str = "MARKET",
+                            price: float = None, stop_price: float = None,
+                            duration: str = "DAY", session: str = "NORMAL") -> Dict[str, Any]:
+        """
+        Replace (modify) an option order.
+        
+        Args:
+            account_id: Account ID the order belongs to
+            order_id: Order ID to replace
+            symbol: Underlying stock symbol
+            option_type: Option type (CALL or PUT)
+            expiration_date: Option expiration date in format YYYY-MM-DD
+            strike_price: Option strike price
+            quantity: Number of contracts
+            side: Order side (BUY_TO_OPEN, SELL_TO_OPEN, BUY_TO_CLOSE, SELL_TO_CLOSE)
+            order_type: Order type (MARKET, LIMIT, STOP, STOP_LIMIT)
+            price: Limit price (required for LIMIT and STOP_LIMIT orders)
+            stop_price: Stop price (required for STOP and STOP_LIMIT orders)
+            duration: Order duration (DAY, GOOD_TILL_CANCEL, FILL_OR_KILL)
+            session: Order session (NORMAL, AM, PM, SEAMLESS)
+            
+        Returns:
+            Dict containing replacement result
+        """
+        request = {
+            'action': 'replace_option_order',
+            'account_id': account_id,
+            'order_id': order_id,
+            'symbol': symbol,
+            'option_type': option_type,
+            'expiration_date': expiration_date,
+            'strike_price': strike_price,
+            'quantity': quantity,
+            'side': side,
+            'order_type': order_type,
+            'duration': duration,
+            'session': session
+        }
+        
+        if price is not None:
+            request['price'] = price
+            
+        if stop_price is not None:
+            request['stop_price'] = stop_price
+        
+        return self.send_request(request)
+    
+    def get_option_order_details(self, account_id: str, order_id: str) -> Dict[str, Any]:
+        """
+        Get details of a specific option order.
+        
+        Args:
+            account_id: Account ID the order belongs to
+            order_id: Order ID to get details for
+            
+        Returns:
+            Dict containing order details
+        """
+        request = {
+            'action': 'get_option_order_details',
+            'account_id': account_id,
+            'order_id': order_id
+        }
+        
+        return self.send_request(request)
+    
+    def get_option_orders(self, account_id: str, status: str = None) -> Dict[str, Any]:
+        """
+        Get all option orders for an account, optionally filtered by status.
+        
+        Args:
+            account_id: Account ID to get orders for
+            status: Optional status filter (OPEN, FILLED, CANCELLED, etc.)
+            
+        Returns:
+            Dict containing orders
+        """
+        request = {
+            'action': 'get_option_orders',
+            'account_id': account_id
+        }
+        
+        if status:
+            request['status'] = status
+        
+        return self.send_request(request)
 
 def main():
     """Main function that handles command line arguments or runs demo."""

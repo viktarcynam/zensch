@@ -1,0 +1,6 @@
+{
+    "action": "get_quotes",
+    "symbols": "AAPL",
+    "fields": "all",
+    "use_streaming": true
+}

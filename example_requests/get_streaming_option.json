@@ -1,0 +1,8 @@
+{
+    "action": "get_option_chains",
+    "symbol": "AAPL",
+    "contractType": "CALL",
+    "strike": 180.0,
+    "fromDate": "2023-12-15",
+    "use_streaming": true
+}

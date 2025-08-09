@@ -1,6 +1,6 @@
 """
 TCP Server for Schwab API services.
-Runs in the background and handles client requests for account and position data.
+Runs in the background and handles client requests for account, position, quotes, options data, and order management.
 """
 import socket
 import threading
@@ -15,6 +15,11 @@ from config import config
 from schwab_auth import SchwabAuthenticator
 from account_service import AccountService
 from positions_service import PositionsService
+from quotes_service import quotes_service
+from options_service import options_service
+from stock_orders_service import stock_orders_service
+from option_orders_service import option_orders_service
+from streaming_service import streaming_service
 
 # Configure logging
 logging.basicConfig(
@@ -75,8 +80,23 @@ class SchwabServer:
             if not self.authenticator.test_connection():
                 raise Exception("Failed to authenticate with Schwab API")
             
+            # Initialize core services
             self.account_service = AccountService(self.authenticator)
             self.positions_service = PositionsService(self.authenticator)
+            
+            # Initialize additional services
+            quotes_service.set_client(self.authenticator.client)
+            options_service.set_client(self.authenticator.client)
+            stock_orders_service.set_client(self.authenticator.client)
+            option_orders_service.set_client(self.authenticator.client)
+            streaming_service.set_client(self.authenticator.client)
+            
+            # Start streaming service
+            streaming_result = streaming_service.start_streaming()
+            if streaming_result.get('success'):
+                logger.info("Streaming service started successfully")
+            else:
+                logger.warning(f"Failed to start streaming service: {streaming_result.get('error')}")
             
             logger.info("Schwab API services initialized successfully")
             
@@ -241,7 +261,7 @@ class SchwabServer:
                     }
             
             # Check if services are initialized for other actions
-            if not self.authenticator or not self.account_service or not self.positions_service:
+            if not self.authenticator:
                 return {
                     'success': False,
                     'error': 'Server services not initialized. Please provide credentials.',
@@ -301,6 +321,223 @@ class SchwabServer:
                 result['timestamp'] = timestamp
                 return result
             
+            elif action == 'get_quotes':
+                # Validate request
+                validation = quotes_service.validate_quote_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Get quotes
+                params = validation['validated_params']
+                result = quotes_service.get_quotes(
+                    symbols=params['symbols'],
+                    fields=params['fields'],
+                    indicative=params['indicative']
+                )
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'get_option_chains':
+                # Validate request
+                validation = options_service.validate_option_chain_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Get option chains
+                params = validation['validated_params']
+                symbol = params.pop('symbol')  # Remove symbol from params dict
+                result = options_service.get_option_chains(symbol, **params)
+                result['timestamp'] = timestamp
+                return result
+                
+            # Stock Order Actions
+            elif action == 'place_stock_order':
+                # Validate request
+                validation = stock_orders_service.validate_stock_order_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Place stock order
+                params = validation['validated_params']
+                result = stock_orders_service.place_stock_order(**params)
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'cancel_stock_order':
+                # Validate request
+                validation = stock_orders_service.validate_order_id_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Cancel stock order
+                params = validation['validated_params']
+                result = stock_orders_service.cancel_stock_order(**params)
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'replace_stock_order':
+                # Validate request
+                validation = stock_orders_service.validate_stock_order_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Check for order_id
+                if 'order_id' not in request:
+                    return {
+                        'success': False,
+                        'error': 'Missing required parameter: order_id',
+                        'timestamp': timestamp
+                    }
+                
+                # Replace stock order
+                params = validation['validated_params']
+                params['order_id'] = request['order_id']
+                result = stock_orders_service.replace_stock_order(**params)
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'get_stock_order_details':
+                # Validate request
+                validation = stock_orders_service.validate_order_id_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Get stock order details
+                params = validation['validated_params']
+                result = stock_orders_service.get_stock_order_details(**params)
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'get_stock_orders':
+                # Check for account_id
+                if 'account_id' not in request:
+                    return {
+                        'success': False,
+                        'error': 'Missing required parameter: account_id',
+                        'timestamp': timestamp
+                    }
+                
+                # Get stock orders
+                account_id = request['account_id']
+                status = request.get('status')
+                result = stock_orders_service.get_stock_orders(account_id, status)
+                result['timestamp'] = timestamp
+                return result
+                
+            # Option Order Actions
+            elif action == 'place_option_order':
+                # Validate request
+                validation = option_orders_service.validate_option_order_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Place option order
+                params = validation['validated_params']
+                result = option_orders_service.place_option_order(**params)
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'cancel_option_order':
+                # Validate request
+                validation = option_orders_service.validate_order_id_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Cancel option order
+                params = validation['validated_params']
+                result = option_orders_service.cancel_option_order(**params)
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'replace_option_order':
+                # Validate request
+                validation = option_orders_service.validate_option_order_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Check for order_id
+                if 'order_id' not in request:
+                    return {
+                        'success': False,
+                        'error': 'Missing required parameter: order_id',
+                        'timestamp': timestamp
+                    }
+                
+                # Replace option order
+                params = validation['validated_params']
+                params['order_id'] = request['order_id']
+                result = option_orders_service.replace_option_order(**params)
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'get_option_order_details':
+                # Validate request
+                validation = option_orders_service.validate_order_id_request(request)
+                if not validation['success']:
+                    return {
+                        'success': False,
+                        'error': validation['error'],
+                        'timestamp': timestamp
+                    }
+                
+                # Get option order details
+                params = validation['validated_params']
+                result = option_orders_service.get_option_order_details(**params)
+                result['timestamp'] = timestamp
+                return result
+                
+            elif action == 'get_option_orders':
+                # Check for account_id
+                if 'account_id' not in request:
+                    return {
+                        'success': False,
+                        'error': 'Missing required parameter: account_id',
+                        'timestamp': timestamp
+                    }
+                
+                # Get option orders
+                account_id = request['account_id']
+                status = request.get('status')
+                result = option_orders_service.get_option_orders(account_id, status)
+                result['timestamp'] = timestamp
+                return result
+            
             else:
                 return {
                     'success': False,
@@ -308,7 +545,11 @@ class SchwabServer:
                     'available_actions': [
                         'ping', 'test_connection', 'initialize_credentials',
                         'get_linked_accounts', 'get_account_details', 'get_account_summary',
-                        'get_positions', 'get_positions_by_symbol'
+                        'get_positions', 'get_positions_by_symbol', 'get_quotes', 'get_option_chains',
+                        'place_stock_order', 'cancel_stock_order', 'replace_stock_order', 
+                        'get_stock_order_details', 'get_stock_orders',
+                        'place_option_order', 'cancel_option_order', 'replace_option_order',
+                        'get_option_order_details', 'get_option_orders'
                     ],
                     'timestamp': timestamp
                 }

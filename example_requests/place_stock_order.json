@@ -1,0 +1,10 @@
+{
+  "action": "place_stock_order",
+  "account_id": "your_account_id",
+  "symbol": "AAPL",
+  "quantity": 10,
+  "side": "BUY",
+  "order_type": "LIMIT",
+  "price": 150.00,
+  "duration": "DAY"
+}

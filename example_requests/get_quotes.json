@@ -1,0 +1,6 @@
+{
+  "action": "get_quotes",
+  "symbols": ["AAPL", "MSFT", "GOOG"],
+  "fields": "all",
+  "indicative": false
+}

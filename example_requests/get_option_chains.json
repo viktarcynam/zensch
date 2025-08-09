@@ -1,0 +1,9 @@
+{
+  "action": "get_option_chains",
+  "symbol": "AAPL",
+  "contractType": "ALL",
+  "strikeCount": 10,
+  "includeUnderlyingQuote": true,
+  "strategy": "SINGLE",
+  "range": "ATM"
+}
