@@ -22,13 +22,27 @@ class JSONRequestParser:
         'get_account_details',
         'get_account_summary',
         'get_positions',
-        'get_positions_by_symbol'
+        'get_positions_by_symbol',
+        'get_quotes',
+        'get_option_chains',
+        'place_stock_order',
+        'cancel_stock_order',
+        'replace_stock_order',
+        'get_stock_order_details',
+        'get_stock_orders',
+        'place_option_order',
+        'cancel_option_order',
+        'replace_option_order',
+        'get_option_order_details',
+        'get_option_orders'
     }
     
     # Required parameters for each action
     REQUIRED_PARAMS = {
         'initialize_credentials': ['app_key', 'app_secret'],
-        'get_positions_by_symbol': ['symbol']
+        'get_positions_by_symbol': ['symbol'],
+        'get_quotes': ['symbols'],
+        'get_option_chains': ['symbol']
     }
     
     # Optional parameters for each action
@@ -37,7 +51,9 @@ class JSONRequestParser:
         'get_account_details': ['account_hash', 'include_positions'],
         'get_account_summary': ['account_hash'],
         'get_positions': ['account_hash'],
-        'get_positions_by_symbol': ['account_hash']
+        'get_positions_by_symbol': ['account_hash'],
+        'get_quotes': ['fields', 'indicative', 'use_streaming'],
+        'get_option_chains': ['contractType', 'strike', 'fromDate', 'toDate', 'use_streaming']
     }
     
     def __init__(self):

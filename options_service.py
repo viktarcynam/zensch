@@ -136,15 +136,21 @@ class OptionsService:
                 expiration_date = kwargs.get('fromDate') or kwargs.get('toDate')
                 
                 if expiration_date:
+                    # Convert datetime to string if needed for streaming service
+                    if isinstance(expiration_date, datetime):
+                        expiration_date_str = expiration_date.strftime('%Y-%m-%d')
+                    else:
+                        expiration_date_str = str(expiration_date)
+                    
                     # Add option to streaming subscriptions
                     streaming_service.add_option_subscription(
-                        symbol, option_type, expiration_date, strike_price
+                        symbol, option_type, expiration_date_str, strike_price
                     )
                     logger.info(f"Added option {symbol} {option_type} {strike_price} {expiration_date} to streaming subscriptions")
                     
                     # Try to get streaming data if requested
                     streaming_data = streaming_service.get_option_data(
-                        symbol, option_type, expiration_date, strike_price
+                        symbol, option_type, expiration_date_str, strike_price
                     )
                     
                     if streaming_data.get('success') and streaming_data.get('data', {}).get('source') == 'streaming':

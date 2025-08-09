@@ -73,10 +73,25 @@ class QuotesService:
                 logger.warning(f"Invalid fields parameter: {fields}. Using default 'all'.")
                 fields = "all"
             
-            # Always add symbols to streaming subscriptions for future use
-            for symbol in symbols:
-                streaming_service.add_stock_subscription(symbol)
-                logger.info(f"Added {symbol} to streaming subscriptions")
+            # Add symbols to streaming subscriptions for future use (non-blocking)
+            # Only if streaming service is available and client is authenticated
+            try:
+                import threading
+                def add_streaming_subscriptions():
+                    try:
+                        for symbol in symbols:
+                            result = streaming_service.add_stock_subscription(symbol)
+                            if result.get('success'):
+                                logger.info(f"Added {symbol} to streaming subscriptions")
+                            else:
+                                logger.debug(f"Could not add {symbol} to streaming: {result.get('error')}")
+                    except Exception as e:
+                        logger.debug(f"Streaming not available: {str(e)}")
+                
+                # Run in background thread to avoid blocking the quote request
+                threading.Thread(target=add_streaming_subscriptions, daemon=True).start()
+            except Exception as e:
+                logger.debug(f"Streaming service not available: {str(e)}")
             
             # Check if we should use streaming data
             if use_streaming and len(symbols) == 1:
