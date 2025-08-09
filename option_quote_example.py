@@ -53,8 +53,8 @@ def main():
         })
         print_response(response)
 
-        # Example 4: Fully defaulted (expiry and strike)
-        logger.info("\nExample 4: Get option quote with all defaults")
+        # Example 4: Default expiry and strike
+        logger.info("\nExample 4: Get option quote with default expiry and strike")
         response = client.send_request({
             "action": "get_option_quote",
             "symbol": "TSLA"
@@ -69,6 +69,12 @@ def main():
             "expiry": "20", # Assumes the 20th of the current or next month
             "strike": 140
         })
+        print_response(response)
+
+        # Example 6: Fully defaulted (no arguments)
+        logger.info("\nExample 6: Get option quote with no arguments")
+        logger.info("This will use the last successful request's parameters (from Example 5).")
+        response = client.send_request({"action": "get_option_quote"})
         print_response(response)
 
 

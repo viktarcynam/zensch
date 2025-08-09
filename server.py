@@ -19,7 +19,7 @@ from quotes_service import quotes_service
 from options_service import options_service
 from stock_orders_service import stock_orders_service
 from option_orders_service import option_orders_service
-# from streaming_service import streaming_service
+from state_manager import state_manager
 
 # Configure logging
 logging.basicConfig(
@@ -50,6 +50,9 @@ class SchwabServer:
         self.authenticator = None
         self.account_service = None
         self.positions_service = None
+
+        # Load the persistent state
+        state_manager._load_state()
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)

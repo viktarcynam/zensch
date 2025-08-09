@@ -57,6 +57,16 @@ def main():
         response = client.send_from_file("example_requests/get_quotes.json")
         print_response(response)
 
+        # Example 6: Default quote (first time will be SPY, second time will be last request)
+        logger.info("\nExample 6: Default quote request (no symbols)")
+        logger.info("First call will default to SPY if no state is saved.")
+        response = client.get_quotes()
+        print_response(response)
+
+        logger.info("\nSecond call will default to the last successful request (from Example 5).")
+        response = client.get_quotes()
+        print_response(response)
+
 def print_response(response):
     """Print a formatted response."""
     if response.get('success'):

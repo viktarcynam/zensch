@@ -13,6 +13,7 @@ logger = logging.getLogger('options_service')
 
 # Import quotes_service to get underlying prices
 from quotes_service import quotes_service
+from state_manager import state_manager
 
 # Valid parameter values for validation
 VALID_CONTRACT_TYPES = ["ALL", "CALL", "PUT"]
@@ -101,15 +102,34 @@ class OptionsService:
         else:
             return today + timedelta(days=days_until_friday)
 
-    def get_option_quote(self, symbol: str, expiry: Optional[Union[str, int]] = None, strike: Optional[float] = None) -> Dict[str, Any]:
+    def get_option_quote(self, symbol: Optional[str] = None, expiry: Optional[Union[str, int]] = None, strike: Optional[float] = None) -> Dict[str, Any]:
         """
-        Get a formatted quote for a specific option strike, including both CALL and PUT.
+        Get a formatted quote for a specific option strike.
+        Handles complex defaulting logic for missing parameters.
         """
         if not self.schwab_client:
             return {"success": False, "error": "Schwab client not initialized."}
 
         try:
-            # 1. Determine Expiration Date
+            # 1. Determine parameters using defaults if necessary
+            last_request = state_manager.get_last_option_quote_request() or {}
+
+            # Default symbol
+            if not symbol:
+                symbol = last_request.get('symbol')
+                if not symbol: # Still no symbol, use the initial default
+                    symbol = 'SPY'
+                    logger.info("No symbol provided. Defaulting to SPY.")
+
+            # Default expiry
+            if not expiry:
+                expiry = last_request.get('expiry')
+
+            # Default strike
+            if not strike:
+                strike = last_request.get('strike')
+
+            # 2. Resolve the final parameters
             if expiry:
                 target_expiry = self._parse_expiry_date(expiry)
                 if not target_expiry:
@@ -117,21 +137,8 @@ class OptionsService:
             else:
                 target_expiry = self._get_default_expiry()
 
-            # 2. Determine Strike Price
             if not strike:
-                # Get underlying quote to find the current price
-                underlying_quote_response = quotes_service.get_quotes(symbols=[symbol])
-                if not underlying_quote_response.get('success'):
-                    return {"success": False, "error": f"Could not get underlying quote for {symbol}"}
-
-                # This part is tricky because get_quotes now returns a formatted string.
-                # I will need to parse it back or change the design. For now, I will assume I can get the price.
-                # This will require a refactor of quotes_service or a direct API call here.
-                # For now, let's placeholder this logic.
-                # last_price = float(underlying_quote_response['data'][0].split()[1])
-
-                # To avoid this dependency issue for now, I'll just fetch the chain and find the at-the-money strike.
-                # This is less efficient but avoids a design change I'll address later.
+                logger.info(f"No strike provided for {symbol}. Finding at-the-money strike.")
                 chain_for_strikes = self.get_option_chains(symbol, fromDate=target_expiry.strftime('%Y-%m-%d'), toDate=target_expiry.strftime('%Y-%m-%d'))
                 if not chain_for_strikes.get('success'):
                     return {"success": False, "error": f"Could not fetch option chain to determine strike for {symbol}"}
@@ -140,56 +147,35 @@ class OptionsService:
                 if not underlying_price:
                     return {"success": False, "error": f"Underlying price not found in option chain for {symbol}"}
 
-                # Find the closest strike
                 all_strikes = list(chain_for_strikes.get('data', {}).get('callExpDateMap', {}).values())[0].keys()
                 strike = min(all_strikes, key=lambda x: abs(float(x) - underlying_price))
                 logger.info(f"Defaulting to closest strike price: {strike}")
 
-
-            # 3. Fetch the option data for the specific strike and format it
-            chain_response = self.get_option_chains(
-                symbol,
-                contractType='ALL',
-                strike=strike,
-                fromDate=target_expiry.strftime('%Y-%m-%d'),
-                toDate=target_expiry.strftime('%Y-%m-%d')
-            )
-
+            # 3. Fetch and format the data
+            chain_response = self.get_option_chains(symbol, contractType='ALL', strike=strike, fromDate=target_expiry.strftime('%Y-%m-%d'), toDate=target_expiry.strftime('%Y-%m-%d'))
             if not chain_response.get('success'):
                 return chain_response
 
             chain_data = chain_response.get('data', {})
-
-            # Calculate DTE
             dte = (target_expiry - datetime.now().date()).days
 
-            # Extract Call and Put data
-            call_data = {}
-            put_data = {}
+            call_data = next((c[0] for _, s in chain_data.get('callExpDateMap', {}).items() for k, c in s.items() if float(k) == float(strike)), {})
+            put_data = next((p[0] for _, s in chain_data.get('putExpDateMap', {}).items() for k, p in s.items() if float(k) == float(strike)), {})
 
-            if 'callExpDateMap' in chain_data:
-                for date_map, strike_map in chain_data['callExpDateMap'].items():
-                    if str(float(strike)) in strike_map:
-                        call_data = strike_map[str(float(strike))][0]
-                        break
-
-            if 'putExpDateMap' in chain_data:
-                for date_map, strike_map in chain_data['putExpDateMap'].items():
-                    if str(float(strike)) in strike_map:
-                        put_data = strike_map[str(float(strike))][0]
-                        break
-
-            # Format the final string
             formatted_string = (
                 f"{symbol} {dte} {strike} "
                 f"CALL {call_data.get('last', 'N/A')} {call_data.get('bid', 'N/A')} {call_data.get('ask', 'N/A')} {call_data.get('totalVolume', 'N/A')} "
                 f"PUT {put_data.get('last', 'N/A')} {put_data.get('bid', 'N/A')} {put_data.get('ask', 'N/A')} {put_data.get('totalVolume', 'N/A')}"
             )
 
-            return {
-                "success": True,
-                "data": formatted_string
-            }
+            # 4. Save the successful request state
+            state_manager.save_option_quote_request({
+                'symbol': symbol,
+                'expiry': target_expiry.strftime('%Y%m%d'),
+                'strike': strike
+            })
+
+            return {"success": True, "data": formatted_string}
 
         except Exception as e:
             logger.error(f"Error in get_option_quote: {e}")
