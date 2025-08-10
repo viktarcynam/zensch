@@ -14,7 +14,7 @@ def get_account_hash(client):
     """Get the first account hash."""
     accounts = client.get_linked_accounts()
     if accounts and accounts.get('success'):
-        account_list = accounts.get('accounts', [])
+        account_list = accounts.get('data', [])
         if account_list:
             return account_list[0].get('hashValue')
     print("Error: Could not retrieve account hash.")
