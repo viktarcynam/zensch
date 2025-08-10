@@ -97,12 +97,13 @@ def main():
                     contractType='ALL'
                 )
 
-                if not option_chain_response.get('success'):
+                if not option_chain_response.get('success') or not option_chain_response.get('data'):
                     print(f"Could not retrieve option chain: {option_chain_response.get('error')}")
                     continue
 
-                call_map = option_chain_response.get('callExpDateMap', {})
-                put_map = option_chain_response.get('putExpDateMap', {})
+                option_chain_data = option_chain_response.get('data', {})
+                call_map = option_chain_data.get('callExpDateMap', {})
+                put_map = option_chain_data.get('putExpDateMap', {})
 
                 call_data = None
                 put_data = None

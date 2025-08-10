@@ -1,12 +1,12 @@
-2025-08-10 03:36:57,080 - state_manager - INFO - State file not found. Initializing with empty state.
-2025-08-10 03:36:57,080 - quotes_service - INFO - Quotes service initialized
-2025-08-10 03:36:57,081 - options_service - INFO - Options service initialized
-2025-08-10 03:36:57,087 - stock_orders_service - INFO - Order database initialized
-2025-08-10 03:36:57,087 - stock_orders_service - INFO - Stock orders service initialized
-2025-08-10 03:36:57,087 - option_orders_service - INFO - Option orders service initialized
+2025-08-10 03:41:14,045 - state_manager - INFO - State file not found. Initializing with empty state.
+2025-08-10 03:41:14,046 - quotes_service - INFO - Quotes service initialized
+2025-08-10 03:41:14,047 - options_service - INFO - Options service initialized
+2025-08-10 03:41:14,063 - stock_orders_service - INFO - Order database initialized
+2025-08-10 03:41:14,063 - stock_orders_service - INFO - Stock orders service initialized
+2025-08-10 03:41:14,064 - option_orders_service - INFO - Option orders service initialized
 Starting Schwab API Server (No Credentials Mode)
 ==================================================
-Server will run on localhost:3457
+Server will run on localhost:3458
 
 The server will start without credentials.
 You can initialize credentials later using one of these methods:
@@ -20,19 +20,19 @@ You can initialize credentials later using one of these methods:
 3. Using file + JSON:
    client.send_request("base_credentials.json", '{"app_key": "...", "app_secret": "..."}')
 
-Start server without credentials? (y/n): 2025-08-10 03:36:57,088 - state_manager - INFO - State file not found. Initializing with empty state.
-2025-08-10 03:36:57,089 - server - INFO - Schwab server started on localhost:3457
-2025-08-10 03:37:01,845 - server - INFO - New client connected from ('127.0.0.1', 33138)
-2025-08-10 03:37:01,845 - server - INFO - Received request from ('127.0.0.1', 33138): get_linked_accounts
-2025-08-10 03:37:01,846 - server - INFO - Client ('127.0.0.1', 33138) disconnected
-2025-08-10 03:37:01,857 - server - INFO - Received signal 15, shutting down...
-2025-08-10 03:37:01,857 - server - INFO - Stopping Schwab server...
-2025-08-10 03:37:01,857 - server - INFO - Schwab server stopped
-2025-08-10 03:37:01,857 - server - INFO - Stopping Schwab server...
-2025-08-10 03:37:01,857 - server - INFO - Schwab server stopped
+Start server without credentials? (y/n): 2025-08-10 03:41:14,065 - state_manager - INFO - State file not found. Initializing with empty state.
+2025-08-10 03:41:14,066 - server - INFO - Schwab server started on localhost:3458
+2025-08-10 03:41:18,436 - server - INFO - New client connected from ('127.0.0.1', 54206)
+2025-08-10 03:41:18,438 - server - INFO - Received request from ('127.0.0.1', 54206): get_linked_accounts
+2025-08-10 03:41:18,439 - server - INFO - Client ('127.0.0.1', 54206) disconnected
+2025-08-10 03:41:18,451 - server - INFO - Received signal 15, shutting down...
+2025-08-10 03:41:18,452 - server - INFO - Stopping Schwab server...
+2025-08-10 03:41:18,452 - server - INFO - Schwab server stopped
+2025-08-10 03:41:18,452 - server - INFO - Stopping Schwab server...
+2025-08-10 03:41:18,452 - server - INFO - Schwab server stopped
 
 Server starting...
-Server is now running on localhost:3457
+Server is now running on localhost:3458
 Server is ready to accept connections.
 Use 'initialize_credentials' action to set up API access.
 Press Ctrl+C to stop the server.
