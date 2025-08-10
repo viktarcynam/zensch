@@ -5,14 +5,15 @@ Handles stock options chain requests using the schwabdev library.
 """
 import logging
 from typing import Dict, List, Union, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('options_service')
 
-# Import streaming service for real-time data
-from streaming_service import streaming_service
+# Import quotes_service to get underlying prices
+from quotes_service import quotes_service
+from state_manager import state_manager
 
 # Valid parameter values for validation
 VALID_CONTRACT_TYPES = ["ALL", "CALL", "PUT"]
@@ -46,7 +47,144 @@ class OptionsService:
         """
         self.schwab_client = schwab_client
         logger.info("Schwab client set in options service")
-    
+
+    def _parse_expiry_date(self, expiry_input: Union[str, int]) -> Optional[datetime.date]:
+        """
+        Parse a flexible expiry date input into a date object.
+        Supports yyyymmdd, mmdd, and dd formats.
+        """
+        today = datetime.now()
+        s_expiry = str(expiry_input)
+
+        try:
+            if len(s_expiry) == 8 and s_expiry.isdigit():
+                return datetime.strptime(s_expiry, '%Y%m%d').date()
+
+            elif len(s_expiry) == 4 and s_expiry.isdigit():
+                date_obj = datetime.strptime(s_expiry, '%m%d').date()
+                date_obj = date_obj.replace(year=today.year)
+                if date_obj < today.date():
+                    date_obj = date_obj.replace(year=today.year + 1)
+                return date_obj
+
+            elif len(s_expiry) in [1, 2] and s_expiry.isdigit():
+                day = int(s_expiry)
+                if day < today.day:
+                    # Assume next month
+                    month = today.month + 1
+                    year = today.year
+                    if month > 12:
+                        month = 1
+                        year += 1
+                    return datetime(year, month, day).date()
+                else:
+                    # Assume current month
+                    return datetime(today.year, today.month, day).date()
+            else:
+                # Try standard yyyy-mm-dd format as a fallback
+                return datetime.strptime(s_expiry, '%Y-%m-%d').date()
+
+        except ValueError as e:
+            logger.error(f"Invalid date format for '{expiry_input}': {e}")
+            return None
+
+    def _get_default_expiry(self) -> datetime.date:
+        """
+        Calculate the default expiration date (next upcoming Friday).
+        If today is Friday, it will be next week's Friday.
+        """
+        today = datetime.now().date()
+        days_until_friday = (4 - today.weekday() + 7) % 7
+
+        if days_until_friday == 0:
+            # If today is Friday, we want next Friday
+            return today + timedelta(days=7)
+        else:
+            return today + timedelta(days=days_until_friday)
+
+    def get_option_quote(self, symbol: Optional[str] = None, expiry: Optional[Union[str, int]] = None, strike: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Get a formatted quote for a specific option strike.
+        Handles complex defaulting logic for missing parameters.
+        """
+        if not self.schwab_client:
+            return {"success": False, "error": "Schwab client not initialized."}
+
+        try:
+            # 1. Determine parameters using defaults if necessary
+            last_request = state_manager.get_last_option_quote_request() or {}
+
+            # If a new symbol is provided, invalidate the old state for strike and expiry
+            if symbol and symbol != last_request.get('symbol'):
+                logger.info(f"New symbol '{symbol}' provided. Ignoring saved strike and expiry from previous symbol '{last_request.get('symbol')}'.")
+                last_request['strike'] = None
+                last_request['expiry'] = None
+
+            # Default symbol
+            if not symbol:
+                symbol = last_request.get('symbol') or 'SPY'
+                logger.info(f"No symbol provided. Defaulting to '{symbol}'.")
+
+            # Default expiry
+            if not expiry:
+                expiry = last_request.get('expiry')
+
+            # Default strike
+            if not strike:
+                strike = last_request.get('strike')
+
+            # 2. Resolve the final parameters
+            if expiry:
+                target_expiry = self._parse_expiry_date(expiry)
+                if not target_expiry:
+                    return {"success": False, "error": f"Invalid expiry date format: {expiry}"}
+            else:
+                target_expiry = self._get_default_expiry()
+
+            if not strike:
+                logger.info(f"No strike provided for {symbol}. Finding at-the-money strike.")
+                chain_for_strikes = self.get_option_chains(symbol, fromDate=target_expiry.strftime('%Y-%m-%d'), toDate=target_expiry.strftime('%Y-%m-%d'))
+                if not chain_for_strikes.get('success'):
+                    return {"success": False, "error": f"Could not fetch option chain to determine strike for {symbol}"}
+
+                underlying_price = chain_for_strikes.get('data', {}).get('underlyingPrice')
+                if not underlying_price:
+                    return {"success": False, "error": f"Underlying price not found in option chain for {symbol}"}
+
+                all_strikes = list(chain_for_strikes.get('data', {}).get('callExpDateMap', {}).values())[0].keys()
+                strike = min(all_strikes, key=lambda x: abs(float(x) - underlying_price))
+                logger.info(f"Defaulting to closest strike price: {strike}")
+
+            # 3. Fetch and format the data
+            chain_response = self.get_option_chains(symbol, contractType='ALL', strike=strike, fromDate=target_expiry.strftime('%Y-%m-%d'), toDate=target_expiry.strftime('%Y-%m-%d'))
+            if not chain_response.get('success'):
+                return chain_response
+
+            chain_data = chain_response.get('data', {})
+            dte = (target_expiry - datetime.now().date()).days
+
+            call_data = next((c[0] for _, s in chain_data.get('callExpDateMap', {}).items() for k, c in s.items() if float(k) == float(strike)), {})
+            put_data = next((p[0] for _, s in chain_data.get('putExpDateMap', {}).items() for k, p in s.items() if float(k) == float(strike)), {})
+
+            formatted_string = (
+                f"{symbol} {dte} {strike} "
+                f"CALL {call_data.get('last', 'N/A')} {call_data.get('bid', 'N/A')} {call_data.get('ask', 'N/A')} {call_data.get('totalVolume', 'N/A')} "
+                f"PUT {put_data.get('last', 'N/A')} {put_data.get('bid', 'N/A')} {put_data.get('ask', 'N/A')} {put_data.get('totalVolume', 'N/A')}"
+            )
+
+            # 4. Save the successful request state
+            state_manager.save_option_quote_request({
+                'symbol': symbol,
+                'expiry': target_expiry.strftime('%Y%m%d'),
+                'strike': strike
+            })
+
+            return {"success": True, "data": formatted_string}
+
+        except Exception as e:
+            logger.error(f"Error in get_option_quote: {e}")
+            return {"success": False, "error": str(e)}
+
     def get_option_chains(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """
         Get option chains for a specified symbol.
@@ -117,48 +255,6 @@ class OptionsService:
                     except ValueError:
                         logger.warning(f"Invalid {param} value: {kwargs[param]}. Should be numeric.")
             
-            # Extract use_streaming parameter and remove from kwargs if present
-            use_streaming = kwargs.pop('use_streaming', False)
-            
-            # Always add underlying stock to streaming subscriptions for future use
-            streaming_service.add_stock_subscription(symbol)
-            logger.info(f"Added underlying stock {symbol} to streaming subscriptions")
-            
-            # Check if we should use streaming data for a specific option
-            if (use_streaming and 
-                'contractType' in kwargs and kwargs['contractType'] in ['CALL', 'PUT'] and
-                'strike' in kwargs and
-                ('fromDate' in kwargs or 'toDate' in kwargs)):
-                
-                # Try to get streaming data for this specific option
-                option_type = kwargs['contractType']
-                strike_price = float(kwargs['strike'])
-                expiration_date = kwargs.get('fromDate') or kwargs.get('toDate')
-                
-                if expiration_date:
-                    # Convert datetime to string if needed for streaming service
-                    if isinstance(expiration_date, datetime):
-                        expiration_date_str = expiration_date.strftime('%Y-%m-%d')
-                    else:
-                        expiration_date_str = str(expiration_date)
-                    
-                    # Add option to streaming subscriptions
-                    streaming_service.add_option_subscription(
-                        symbol, option_type, expiration_date_str, strike_price
-                    )
-                    logger.info(f"Added option {symbol} {option_type} {strike_price} {expiration_date} to streaming subscriptions")
-                    
-                    # Try to get streaming data if requested
-                    streaming_data = streaming_service.get_option_data(
-                        symbol, option_type, expiration_date_str, strike_price
-                    )
-                    
-                    if streaming_data.get('success') and streaming_data.get('data', {}).get('source') == 'streaming':
-                        logger.info(f"Using streaming data for option {symbol} {option_type} {strike_price} {expiration_date}")
-                        return streaming_data
-                    else:
-                        logger.info(f"Streaming data not available for option, using option chain API")
-            
             # Call schwabdev option_chains method
             options_response = self.schwab_client.option_chains(symbol=symbol, **kwargs)
             
@@ -166,33 +262,6 @@ class OptionsService:
             if hasattr(options_response, 'json'):
                 options_data = options_response.json()
                 logger.info(f"Successfully retrieved option chains for {symbol}")
-                
-                # If specific contract type and strike are requested, add to streaming for future use
-                if 'contractType' in kwargs and kwargs['contractType'] in ['CALL', 'PUT']:
-                    # Extract expiration dates and strikes from the response
-                    if kwargs['contractType'] == 'CALL' and 'callExpDateMap' in options_data:
-                        for exp_date, strikes in options_data['callExpDateMap'].items():
-                            # Extract expiration date from the key (format varies by broker)
-                            exp_date_parts = exp_date.split(':')[0]  # Remove any extra parts after colon
-                            
-                            for strike in strikes.keys():
-                                # Add each option to streaming
-                                streaming_service.add_option_subscription(
-                                    symbol, 'CALL', exp_date_parts, float(strike)
-                                )
-                                logger.debug(f"Added option {symbol} CALL {strike} {exp_date_parts} to streaming subscriptions")
-                    
-                    elif kwargs['contractType'] == 'PUT' and 'putExpDateMap' in options_data:
-                        for exp_date, strikes in options_data['putExpDateMap'].items():
-                            # Extract expiration date from the key (format varies by broker)
-                            exp_date_parts = exp_date.split(':')[0]  # Remove any extra parts after colon
-                            
-                            for strike in strikes.keys():
-                                # Add each option to streaming
-                                streaming_service.add_option_subscription(
-                                    symbol, 'PUT', exp_date_parts, float(strike)
-                                )
-                                logger.debug(f"Added option {symbol} PUT {strike} {exp_date_parts} to streaming subscriptions")
                 
                 return {
                     "success": True,
@@ -296,12 +365,6 @@ class OptionsService:
         for param in other_params:
             if param in request_data:
                 validated_params[param] = request_data[param]
-        
-        # Add use_streaming parameter with default value
-        use_streaming = request_data.get('use_streaming', False)
-        if isinstance(use_streaming, str):
-            use_streaming = use_streaming.lower() == 'true'
-        validated_params['use_streaming'] = use_streaming
         
         if errors:
             return {

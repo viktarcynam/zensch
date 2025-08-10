@@ -19,7 +19,7 @@ from quotes_service import quotes_service
 from options_service import options_service
 from stock_orders_service import stock_orders_service
 from option_orders_service import option_orders_service
-from streaming_service import streaming_service
+from state_manager import state_manager
 
 # Configure logging
 logging.basicConfig(
@@ -50,6 +50,9 @@ class SchwabServer:
         self.authenticator = None
         self.account_service = None
         self.positions_service = None
+
+        # Load the persistent state
+        state_manager._load_state()
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -89,14 +92,14 @@ class SchwabServer:
             options_service.set_client(self.authenticator.client)
             stock_orders_service.set_client(self.authenticator.client)
             option_orders_service.set_client(self.authenticator.client)
-            streaming_service.set_client(self.authenticator.client)
+            # streaming_service.set_client(self.authenticator.client)
             
             # Start streaming service
-            streaming_result = streaming_service.start_streaming()
-            if streaming_result.get('success'):
-                logger.info("Streaming service started successfully")
-            else:
-                logger.warning(f"Failed to start streaming service: {streaming_result.get('error')}")
+            # streaming_result = streaming_service.start_streaming()
+            # if streaming_result.get('success'):
+            #     logger.info("Streaming service started successfully")
+            # else:
+            #     logger.warning(f"Failed to start streaming service: {streaming_result.get('error')}")
             
             logger.info("Schwab API services initialized successfully")
             
@@ -355,6 +358,15 @@ class SchwabServer:
                 params = validation['validated_params']
                 symbol = params.pop('symbol')  # Remove symbol from params dict
                 result = options_service.get_option_chains(symbol, **params)
+                result['timestamp'] = timestamp
+                return result
+
+            elif action == 'get_option_quote':
+                symbol = request.get('symbol')
+                expiry = request.get('expiry')
+                strike = request.get('strike')
+
+                result = options_service.get_option_quote(symbol, expiry, strike)
                 result['timestamp'] = timestamp
                 return result
                 

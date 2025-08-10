@@ -376,17 +376,18 @@ class SchwabClient:
         """
         return self.send_request(filename, *additional_args)
         
-    def get_quotes(self, symbols, fields: str = "all", indicative: bool = False) -> Dict[str, Any]:
+    def get_quotes(self, symbols: Optional[Union[list, str]] = None, fields: str = "all", indicative: bool = False) -> Dict[str, Any]:
         """
-        Get quotes for specified symbols.
+        Get quotes for specified symbols. If symbols are not provided,
+        the server will use the last requested symbols or a default.
         
         Args:
-            symbols: List of symbols or comma-separated string of symbols
-            fields: Fields to include in the quote ("all", "quote", or "fundamental")
-            indicative: Whether to return indicative quotes
+            symbols: Optional list/string of symbols.
+            fields: Fields to include ("all", "quote", "fundamental").
+            indicative: Whether to return indicative quotes.
             
         Returns:
-            Dict containing quote results
+            Dict containing quote results.
         """
         request = {
             'action': 'get_quotes',
@@ -435,6 +436,21 @@ class SchwabClient:
         
         return self.send_request(request)
         
+    def get_option_quote(self, symbol: Optional[str] = None, expiry: Optional[Union[str, int]] = None, strike: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Get a formatted quote for a specific option strike.
+        Parameters are optional and will be defaulted by the server if not provided.
+        """
+        request = {'action': 'get_option_quote'}
+        if symbol:
+            request['symbol'] = symbol
+        if expiry:
+            request['expiry'] = expiry
+        if strike:
+            request['strike'] = strike
+
+        return self.send_request(request)
+
     # Stock Order Methods
     
     def place_stock_order(self, account_id: str, symbol: str, quantity: int, 
