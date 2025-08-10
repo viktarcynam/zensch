@@ -27,17 +27,17 @@ def main():
 
         # Example 1: Specific symbol, expiry, and strike
         logger.info("\nExample 1: Get option quote for a specific symbol, expiry, and strike")
-        response = client.get_option_quote(symbol="AAPL", expiry="20241220", strike=190)
+        response = client.get_option_quote(symbol="AAPL", expiry="20250815", strike=225)
         print_response(response)
 
         # Example 2: Default strike, specific expiry
         logger.info("\nExample 2: Get option quote with default (at-the-money) strike")
-        response = client.get_option_quote(symbol="MSFT", expiry="1220")
+        response = client.get_option_quote(symbol="MSFT", expiry="0815")
         print_response(response)
 
         # Example 3: Default expiry, specific strike
         logger.info("\nExample 3: Get option quote with default expiry (next Friday)")
-        response = client.get_option_quote(symbol="NVDA", strike=800)
+        response = client.get_option_quote(symbol="NVDA", strike=185)
         print_response(response)
 
         # Example 4: Default expiry and strike
@@ -47,7 +47,7 @@ def main():
 
         # Example 5: 'dd' date format
         logger.info("\nExample 5: Using 'dd' for expiry date")
-        response = client.get_option_quote(symbol="GOOG", expiry="20", strike=140)
+        response = client.get_option_quote(symbol="GOOG", expiry="15", strike=205)
         print_response(response)
 
         # Example 6: Fully defaulted (no arguments)

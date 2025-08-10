@@ -6,8 +6,8 @@
         ]
     },
     "last_option_quote": {
-        "symbol": "AAPL",
-        "expiry": "20241220",
-        "strike": 155
+        "symbol": "GOOG",
+        "expiry": "20250815",
+        "strike": 205
     }
 }
