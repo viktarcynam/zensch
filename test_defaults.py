@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 from quotes_service import QuotesService
 from options_service import OptionsService
+from datetime import date, datetime
 
 class TestDefaulting(unittest.TestCase):
 
@@ -48,8 +49,7 @@ class TestDefaulting(unittest.TestCase):
         mock_state_manager.save_stock_quote_request.assert_called_with({'symbols': ['TSLA']})
 
     @patch('options_service.state_manager')
-    @patch('options_service.quotes_service')
-    def test_get_option_quote_full_default(self, mock_quotes_service, mock_state_manager):
+    def test_get_option_quote_full_default(self, mock_state_manager):
         # No state exists
         mock_state_manager.get_last_option_quote_request.return_value = None
 
@@ -61,8 +61,8 @@ class TestDefaulting(unittest.TestCase):
         }
 
         with patch('options_service.datetime') as mock_date:
-            mock_date.now.return_value.date.return_value = unittest.mock.MagicMock(weekday=lambda: 0) # Monday
-            mock_date.now.return_value = unittest.mock.MagicMock(date=lambda: unittest.mock.MagicMock(weekday=lambda: 0))
+            mock_date.now.return_value = datetime(2024, 8, 9) # A Friday
+            mock_date.strptime = datetime.strptime
 
             # Call with no parameters
             result = self.options_service.get_option_quote()
@@ -74,6 +74,63 @@ class TestDefaulting(unittest.TestCase):
 
             # Assert state was saved
             mock_state_manager.save_option_quote_request.assert_called()
+
+    @patch('options_service.state_manager')
+    def test_get_option_quote_new_symbol_defaults(self, mock_state_manager):
+        # State exists for a different symbol
+        mock_state_manager.get_last_option_quote_request.return_value = {
+            "symbol": "AAPL", "expiry": "20241220", "strike": 190
+        }
+
+        # Mock the chain response for the new symbol (MSFT)
+        self.mock_schwab_client.option_chains.return_value.json.return_value = {
+            "underlyingPrice": 400.0,
+            "callExpDateMap": {"2025-01-17:0": {"400.0": [{"last": 20.0}]}},
+            "putExpDateMap": {"2025-01-17:0": {"400.0": [{"last": 22.0}]}}
+        }
+
+        with patch('options_service.datetime') as mock_date:
+            mock_date.now.return_value = datetime(2024, 8, 10) # Saturday
+            mock_date.strptime = datetime.strptime
+
+            # Call with a new symbol, no strike or expiry
+            result = self.options_service.get_option_quote(symbol="MSFT")
+
+            self.assertTrue(result['success'])
+            self.assertIn("MSFT", result['data'])
+            self.assertIn("400.0", result['data'])
+
+            saved_args = mock_state_manager.save_option_quote_request.call_args[0][0]
+            self.assertEqual(saved_args['symbol'], 'MSFT')
+            self.assertEqual(saved_args['strike'], '400.0')
+
+    @patch('options_service.state_manager')
+    def test_get_option_quote_same_symbol_uses_state(self, mock_state_manager):
+        # State exists for AAPL
+        mock_state_manager.get_last_option_quote_request.return_value = {
+            "symbol": "AAPL", "expiry": "20241220", "strike": 190
+        }
+
+        self.mock_schwab_client.option_chains.return_value.json.return_value = {
+            "underlyingPrice": 185.0,
+            "callExpDateMap": {"2024-12-20:0": {"190": [{"last": 5.0}]}},
+            "putExpDateMap": {"2024-12-20:0": {"190": [{"last": 6.0}]}}
+        }
+
+        with patch('options_service.datetime') as mock_date:
+            mock_date.now.return_value = datetime(2024, 8, 10)
+            mock_date.strptime = datetime.strptime
+
+            result = self.options_service.get_option_quote(symbol="AAPL")
+
+            self.assertTrue(result['success'])
+            self.assertIn("AAPL", result['data'])
+            self.assertIn("190", result['data'])
+
+            saved_args = mock_state_manager.save_option_quote_request.call_args[0][0]
+            self.assertEqual(saved_args['symbol'], 'AAPL')
+            self.assertEqual(saved_args['expiry'], '20241220')
+            self.assertEqual(saved_args['strike'], 190)
 
 if __name__ == '__main__':
     unittest.main()

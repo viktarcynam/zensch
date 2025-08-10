@@ -114,12 +114,16 @@ class OptionsService:
             # 1. Determine parameters using defaults if necessary
             last_request = state_manager.get_last_option_quote_request() or {}
 
+            # If a new symbol is provided, invalidate the old state for strike and expiry
+            if symbol and symbol != last_request.get('symbol'):
+                logger.info(f"New symbol '{symbol}' provided. Ignoring saved strike and expiry from previous symbol '{last_request.get('symbol')}'.")
+                last_request['strike'] = None
+                last_request['expiry'] = None
+
             # Default symbol
             if not symbol:
-                symbol = last_request.get('symbol')
-                if not symbol: # Still no symbol, use the initial default
-                    symbol = 'SPY'
-                    logger.info("No symbol provided. Defaulting to SPY.")
+                symbol = last_request.get('symbol') or 'SPY'
+                logger.info(f"No symbol provided. Defaulting to '{symbol}'.")
 
             # Default expiry
             if not expiry:
