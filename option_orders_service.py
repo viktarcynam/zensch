@@ -196,19 +196,12 @@ class OptionOrdersService:
             response = self.schwab_client.order_place(account_id, order_params)
             
             # Process the response
-            if hasattr(response, 'json'):
-                order_data = response.json()
-                logger.info(f"Successfully placed option order for {option_symbol}")
-                
-                # Extract order ID from response
-                order_id = None
-                if 'orderId' in order_data:
-                    order_id = order_data['orderId']
-                elif 'order_id' in order_data:
-                    order_id = order_data['order_id']
-                
-                # Log order to database
-                if order_id:
+            if response.ok:
+                order_id = response.headers.get('location', '/').split('/')[-1]
+                if order_id and order_id.isdigit():
+                    logger.info(f"Successfully placed option order for {option_symbol}, order ID: {order_id}")
+
+                    # Log order to database
                     log_data = {
                         'order_id': order_id,
                         'account_id': account_id,
@@ -227,46 +220,26 @@ class OptionOrdersService:
                         'time_executed': datetime.now().isoformat()
                     }
                     log_order_to_db(log_data)
-                
-                return {
-                    "success": True,
-                    "data": order_data,
-                    "message": f"Option order for {option_symbol} placed successfully"
-                }
+
+                    return {
+                        "success": True,
+                        "data": {"order_id": order_id},
+                        "message": f"Option order for {option_symbol} placed successfully"
+                    }
+                else:
+                    # Handle cases where order might be filled immediately and no location header is returned
+                    logger.info("Order placed, but no order ID returned in location header. It may have filled immediately.")
+                    return {
+                        "success": True,
+                        "data": response.json() if response.content else {},
+                        "message": "Order placed, but no order ID returned. It may have filled immediately."
+                    }
             else:
-                # Handle case where response is already parsed
-                logger.info(f"Successfully placed option order for {option_symbol}")
-                
-                # Extract order ID from response if possible
-                order_id = None
-                if hasattr(response, 'get'):
-                    order_id = response.get('orderId') or response.get('order_id')
-                
-                # Log order to database
-                if order_id:
-                    log_data = {
-                        'order_id': order_id,
-                        'account_id': account_id,
-                        'symbol': symbol,
-                        'instrument_type': 'OPTION',
-                        'option_type': option_type,
-                        'expiration_date': expiration_date,
-                        'strike_price': strike_price,
-                        'side': side,
-                        'quantity': quantity,
-                        'order_type': order_type,
-                        'limit_price': price,
-                        'stop_price': stop_price,
-                        'underlying_price': underlying_price,
-                        'status': 'PLACED',
-                        'time_executed': datetime.now().isoformat()
-                    }
-                    log_order_to_db(log_data)
-                
+                error_msg = f"Failed to place option order: {response.status_code} - {response.text}"
+                logger.error(error_msg)
                 return {
-                    "success": True,
-                    "data": response,
-                    "message": f"Option order for {option_symbol} placed successfully"
+                    "success": False,
+                    "error": error_msg
                 }
                 
         except Exception as e:
