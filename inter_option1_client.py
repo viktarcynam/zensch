@@ -101,6 +101,116 @@ def check_for_existing_order(client, account_hash, symbol, option_type, strike_p
     print("No matching working orders found.")
     return None
 
+def place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, positions_response, target_option_data):
+    """Handles the entire workflow for placing and monitoring an order."""
+    quantity = 1
+
+    # Determine side
+    side = ""
+    if action == 'B':
+        side = "BUY_TO_OPEN"
+    else: # 'S'
+        side = "SELL_TO_CLOSE" if any(p['instrument'].get('symbol') == target_option_data['symbol'] for p in positions_response.get('positions',[])) else "SELL_TO_OPEN"
+
+    # Place opening order
+    order_response = client.place_option_order(
+        account_id=account_hash,
+        symbol=symbol,
+        option_type="CALL" if option_type_in == 'C' else "PUT",
+        expiration_date=expiry_date,
+        strike_price=strike_price,
+        quantity=quantity,
+        side=side,
+        order_type="LIMIT",
+        price=price
+    )
+
+    print_response("Order Placement Result", order_response)
+
+    if order_response.get('success'):
+        order_data = order_response.get('data', {})
+        order_id = order_data.get('order_id')
+
+        if order_id:
+            filled_order = poll_order_status(client, account_hash, order_id)
+            if filled_order:
+                # Get the current quote for the option
+                print("\nFetching current quote for closing order...")
+                closing_option_chain_response = client.get_option_chains(
+                    symbol=symbol,
+                    strike=strike_price,
+                    fromDate=expiry_date,
+                    toDate=expiry_date,
+                    contractType='ALL'
+                )
+
+                if closing_option_chain_response.get('success') and closing_option_chain_response.get('data'):
+                    closing_option_data = closing_option_chain_response['data']
+                    closing_call_map = closing_option_data.get('callExpDateMap', {})
+                    closing_put_map = closing_option_data.get('putExpDateMap', {})
+
+                    closing_call_data = None
+                    closing_put_data = None
+
+                    closing_date_key = next((key for key in closing_call_map if key.startswith(expiry_date)), None)
+                    if closing_date_key:
+                        closing_strike_map_call = closing_call_map.get(closing_date_key, {})
+                        closing_call_data = closing_strike_map_call.get(str(float(strike_price)), [None])[0]
+
+                    closing_date_key_put = next((key for key in closing_put_map if key.startswith(expiry_date)), None)
+                    if closing_date_key_put:
+                        closing_strike_map_put = closing_put_map.get(closing_date_key_put, {})
+                        closing_put_data = closing_strike_map_put.get(str(float(strike_price)), [None])[0]
+
+                    if closing_call_data and closing_put_data:
+                        print(f"Current prices: CALL: {closing_call_data['bid']}/{closing_call_data['ask']}  PUT: {closing_put_data['bid']}/{closing_put_data['ask']}")
+                    else:
+                        print("Could not retrieve current prices for closing order.")
+
+                # Prompt for closing price
+                closing_price_str = input("Enter limit price for closing order: ")
+                try:
+                    closing_price = float(closing_price_str)
+                except ValueError:
+                    print("Invalid price. Aborting closing order.")
+                    return
+
+                # Determine closing side
+                closing_side = "SELL_TO_CLOSE" if side == "BUY_TO_OPEN" else "BUY_TO_CLOSE"
+
+                # Place closing order
+                closing_order_response = client.place_option_order(
+                    account_id=account_hash,
+                    symbol=symbol,
+                    option_type="CALL" if option_type_in == 'C' else "PUT",
+                    expiration_date=expiry_date,
+                    strike_price=strike_price,
+                    quantity=quantity,
+                    side=closing_side,
+                    order_type="LIMIT",
+                    price=closing_price
+                )
+
+                print_response("Closing Order Placement Result", closing_order_response)
+
+                if closing_order_response.get('success'):
+                    closing_order_data = closing_order_response.get('data', {})
+                    closing_order_id = closing_order_data.get('order_id')
+
+                    if closing_order_id:
+                        filled_closing_order = poll_order_status(client, account_hash, closing_order_id)
+                        if filled_closing_order:
+                            # Display summary
+                            entry_price = filled_order.get('orderLegCollection', [{}])[0].get('price')
+                            exit_price = filled_closing_order.get('orderLegCollection', [{}])[0].get('price')
+
+                            print("\n--- Trade Summary ---")
+                            print(f"Action: {side}")
+                            print(f"Entry Price: {entry_price}")
+                            print(f"Exit Action: {closing_side}")
+                            print(f"Exit Price: {exit_price}")
+                            print("--------------------")
+
 def main():
     """Main function for the interactive option client."""
     print("Schwab Interactive Option Client")
@@ -269,117 +379,6 @@ def main():
                             continue
                 else:
                     place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, positions_response, target_option_data)
-
-def place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, positions_response, target_option_data):
-    """Handles the entire workflow for placing and monitoring an order."""
-    quantity = 1
-
-    # Determine side
-    side = ""
-    if action == 'B':
-        side = "BUY_TO_OPEN"
-    else: # 'S'
-        side = "SELL_TO_CLOSE" if any(p['instrument'].get('symbol') == target_option_data['symbol'] for p in positions_response.get('positions',[])) else "SELL_TO_OPEN"
-
-    # Place opening order
-    order_response = client.place_option_order(
-        account_id=account_hash,
-        symbol=symbol,
-        option_type="CALL" if option_type_in == 'C' else "PUT",
-        expiration_date=expiry_date,
-        strike_price=strike_price,
-        quantity=quantity,
-        side=side,
-        order_type="LIMIT",
-        price=price
-    )
-
-    print_response("Order Placement Result", order_response)
-
-    if order_response.get('success'):
-        order_data = order_response.get('data', {})
-        order_id = order_data.get('order_id')
-
-        if order_id:
-            filled_order = poll_order_status(client, account_hash, order_id)
-            if filled_order:
-                # Get the current quote for the option
-                print("\nFetching current quote for closing order...")
-                closing_option_chain_response = client.get_option_chains(
-                    symbol=symbol,
-                    strike=strike_price,
-                    fromDate=expiry_date,
-                    toDate=expiry_date,
-                    contractType='ALL'
-                )
-
-                if closing_option_chain_response.get('success') and closing_option_chain_response.get('data'):
-                    closing_option_data = closing_option_chain_response['data']
-                    closing_call_map = closing_option_data.get('callExpDateMap', {})
-                    closing_put_map = closing_option_data.get('putExpDateMap', {})
-
-                    closing_call_data = None
-                    closing_put_data = None
-
-                    closing_date_key = next((key for key in closing_call_map if key.startswith(expiry_date)), None)
-                    if closing_date_key:
-                        closing_strike_map_call = closing_call_map.get(closing_date_key, {})
-                        closing_call_data = closing_strike_map_call.get(str(float(strike_price)), [None])[0]
-
-                    closing_date_key_put = next((key for key in closing_put_map if key.startswith(expiry_date)), None)
-                    if closing_date_key_put:
-                        closing_strike_map_put = closing_put_map.get(closing_date_key_put, {})
-                        closing_put_data = closing_strike_map_put.get(str(float(strike_price)), [None])[0]
-
-                    if closing_call_data and closing_put_data:
-                        print(f"Current prices: CALL: {closing_call_data['bid']}/{closing_call_data['ask']}  PUT: {closing_put_data['bid']}/{closing_put_data['ask']}")
-                    else:
-                        print("Could not retrieve current prices for closing order.")
-
-                # Prompt for closing price
-                closing_price_str = input("Enter limit price for closing order: ")
-                try:
-                    closing_price = float(closing_price_str)
-                except ValueError:
-                    print("Invalid price. Aborting closing order.")
-                    return
-
-                # Determine closing side
-                closing_side = "SELL_TO_CLOSE" if side == "BUY_TO_OPEN" else "BUY_TO_CLOSE"
-
-                # Place closing order
-                closing_order_response = client.place_option_order(
-                    account_id=account_hash,
-                    symbol=symbol,
-                    option_type="CALL" if option_type_in == 'C' else "PUT",
-                    expiration_date=expiry_date,
-                    strike_price=strike_price,
-                    quantity=quantity,
-                    side=closing_side,
-                    order_type="LIMIT",
-                    price=closing_price
-                )
-
-                print_response("Closing Order Placement Result", closing_order_response)
-
-                if closing_order_response.get('success'):
-                    closing_order_data = closing_order_response.get('data', {})
-                    closing_order_id = closing_order_data.get('order_id')
-
-                    if closing_order_id:
-                        filled_closing_order = poll_order_status(client, account_hash, closing_order_id)
-                        if filled_closing_order:
-                            # Display summary
-                            entry_price = filled_order.get('orderLegCollection', [{}])[0].get('price')
-                            exit_price = filled_closing_order.get('orderLegCollection', [{}])[0].get('price')
-
-                            print("\n--- Trade Summary ---")
-                            print(f"Action: {side}")
-                            print(f"Entry Price: {entry_price}")
-                            print(f"Exit Action: {closing_side}")
-                            print(f"Exit Price: {exit_price}")
-                            print("--------------------")
-
             except KeyboardInterrupt:
                 print("\nClient interrupted by user.")
                 break
