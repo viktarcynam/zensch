@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import Dict, Any, Optional
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -53,6 +54,45 @@ class StateManager:
         """Saves the parameters of a successful option quote request."""
         self.state['last_option_quote'] = params
         self._save_state()
+
+    def get_primary_account_hash(self, account_service) -> Optional[str]:
+        """
+        Gets the primary account hash, fetching and caching it if necessary.
+        The cache is considered stale if it's older than 24 hours.
+        """
+        cached_hash = self.state.get('primary_account_hash')
+        cached_timestamp = self.state.get('primary_account_hash_timestamp')
+
+        if cached_hash and cached_timestamp:
+            if not self._is_cache_stale(cached_timestamp):
+                logger.info(f"Using cached primary account hash: {cached_hash}")
+                return cached_hash
+
+        logger.info("Primary account hash cache is stale or missing. Fetching from account service.")
+        accounts_response = account_service.get_linked_accounts()
+        if accounts_response.get('success') and accounts_response.get('data'):
+            first_account = accounts_response['data'][0]
+            account_hash = first_account.get('hash_value')
+            if account_hash:
+                self.save_primary_account_hash(account_hash)
+                return account_hash
+
+        logger.error("Could not fetch primary account hash.")
+        return None
+
+    def save_primary_account_hash(self, account_hash: str):
+        """Saves the primary account hash and timestamp to the state."""
+        self.state['primary_account_hash'] = account_hash
+        self.state['primary_account_hash_timestamp'] = datetime.now().isoformat()
+        self._save_state()
+
+    def _is_cache_stale(self, timestamp_str: str) -> bool:
+        """Checks if the cached timestamp is older than 24 hours."""
+        try:
+            cached_time = datetime.fromisoformat(timestamp_str)
+            return datetime.now() - cached_time > timedelta(days=1)
+        except (ValueError, TypeError):
+            return True
 
 # Create a singleton instance for the application to use
 state_manager = StateManager()
