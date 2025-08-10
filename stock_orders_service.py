@@ -6,7 +6,7 @@ Handles stock order operations using the schwabdev library.
 import logging
 import sqlite3
 from typing import Dict, Any, Optional, Union, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from state_manager import state_manager
 from account_service import AccountService
 
@@ -177,14 +177,19 @@ class StockOrdersService:
             if order_type == "LIMIT" and price is None:
                 try:
                     # Get current quote for the symbol to use as limit price
-                    quote_response = self.schwab_client.get_quote(symbol)
+                    quote_response = self.schwab_client.quote(symbol)
                     if hasattr(quote_response, 'json'):
                         quote_data = quote_response.json()
                         # Use last price or bid price as limit price
-                        if 'lastPrice' in quote_data:
-                            price = quote_data['lastPrice']
-                        elif 'bidPrice' in quote_data:
-                            price = quote_data['bidPrice']
+                        if symbol in quote_data and 'quote' in quote_data[symbol]:
+                            quote = quote_data[symbol]['quote']
+                            if 'lastPrice' in quote:
+                                price = quote['lastPrice']
+                            elif 'bidPrice' in quote:
+                                price = quote['bidPrice']
+                            else:
+                                logger.warning(f"Could not determine limit price for {symbol}, defaulting to MARKET order")
+                                order_type = "MARKET"
                         else:
                             logger.warning(f"Could not determine limit price for {symbol}, defaulting to MARKET order")
                             order_type = "MARKET"
@@ -225,7 +230,7 @@ class StockOrdersService:
                 order_params["stopPrice"] = stop_price
             
             # Place the order
-            response = self.schwab_client.place_order(account_id, order_params)
+            response = self.schwab_client.order_place(account_id, order_params)
             
             # Process the response
             if hasattr(response, 'json'):
@@ -322,7 +327,7 @@ class StockOrdersService:
             logger.info(f"Cancelling stock order {order_id} for account {account_id}")
             
             # Cancel the order
-            response = self.schwab_client.cancel_order(account_id, order_id)
+            response = self.schwab_client.order_cancel(account_id, order_id)
             
             # Process the response
             if hasattr(response, 'status_code'):
@@ -413,7 +418,7 @@ class StockOrdersService:
                 order_params["stopPrice"] = stop_price
             
             # Replace the order
-            response = self.schwab_client.replace_order(account_id, order_id, order_params)
+            response = self.schwab_client.order_replace(account_id, order_id, order_params)
             
             # Process the response
             if hasattr(response, 'json'):
@@ -462,7 +467,7 @@ class StockOrdersService:
             logger.info(f"Getting details for stock order {order_id} in account {account_id}")
             
             # Get order details
-            response = self.schwab_client.get_order(account_id, order_id)
+            response = self.schwab_client.order_details(account_id, order_id)
             
             # Process the response
             if hasattr(response, 'json'):
@@ -509,7 +514,9 @@ class StockOrdersService:
             logger.info(f"Getting stock orders for account {account_id}")
             
             # Get orders
-            response = self.schwab_client.get_orders(account_id, status=status)
+            to_date = datetime.now()
+            from_date = to_date - timedelta(days=90)
+            response = self.schwab_client.account_orders(account_id, from_date, to_date, status=status)
             
             # Process the response
             if hasattr(response, 'json'):
