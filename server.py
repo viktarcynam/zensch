@@ -92,6 +92,7 @@ class SchwabServer:
             options_service.set_client(self.authenticator.client)
             stock_orders_service.set_client(self.authenticator.client, self.account_service)
             option_orders_service.set_client(self.authenticator.client, self.account_service)
+
             # streaming_service.set_client(self.authenticator.client)
             
             # Start streaming service
