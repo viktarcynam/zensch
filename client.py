@@ -134,7 +134,7 @@ class SchwabClient:
             self.socket.send(request_json.encode('utf-8'))
             
             # Receive response
-            response_data = self.socket.recv(16384)  # Increased buffer size for larger responses
+            response_data = self.socket.recv(65536)  # Increased buffer size for larger responses
             response = json.loads(response_data.decode('utf-8'))
             
             return response
