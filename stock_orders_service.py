@@ -7,6 +7,8 @@ import logging
 import sqlite3
 from typing import Dict, Any, Optional, Union, List
 from datetime import datetime
+from state_manager import state_manager
+from account_service import AccountService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -104,35 +106,40 @@ VALID_SIDES = ["BUY", "SELL", "BUY_TO_COVER", "SELL_SHORT"]
 class StockOrdersService:
     """Service for handling stock order operations."""
     
-    def __init__(self, schwab_client=None):
+    def __init__(self, schwab_client=None, account_service=None):
         """
         Initialize the stock orders service.
         
         Args:
             schwab_client: Authenticated schwabdev client instance
+            account_service: Instance of AccountService
         """
         self.schwab_client = schwab_client
+        self.account_service = account_service
         logger.info("Stock orders service initialized")
     
-    def set_client(self, schwab_client):
+    def set_client(self, schwab_client, account_service=None):
         """
         Set the schwabdev client instance.
         
         Args:
             schwab_client: Authenticated schwabdev client instance
+            account_service: Instance of AccountService
         """
         self.schwab_client = schwab_client
+        if account_service:
+            self.account_service = account_service
         logger.info("Schwab client set in stock orders service")
     
-    def place_stock_order(self, account_id: str, symbol: str, quantity: int, 
+    def place_stock_order(self, symbol: str, quantity: int,
                          side: str, order_type: str = "LIMIT", 
                          price: float = None, stop_price: float = None,
-                         duration: str = "DAY", session: str = "NORMAL") -> Dict[str, Any]:
+                         duration: str = "DAY", session: str = "NORMAL",
+                         account_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Place a stock order. Default order type is LIMIT.
         
         Args:
-            account_id: Account ID to place the order for
             symbol: Stock symbol
             quantity: Number of shares
             side: Order side (BUY, SELL, BUY_TO_COVER, SELL_SHORT)
@@ -153,6 +160,19 @@ class StockOrdersService:
             }
         
         try:
+            if not account_id:
+                if not self.account_service:
+                    return {
+                        "success": False,
+                        "error": "Account service not initialized."
+                    }
+                account_id = state_manager.get_primary_account_hash(self.account_service)
+                if not account_id:
+                    return {
+                        "success": False,
+                        "error": "Could not determine account ID. Please specify one."
+                    }
+
             # If order type is LIMIT but no price is provided, try to get current price
             if order_type == "LIMIT" and price is None:
                 try:
