@@ -74,6 +74,24 @@ def format_occ_symbol(symbol, expiration_date, strike_price, option_type_char):
 
     return f"{symbol_padded}{exp_date_formatted}{option_type_char.upper()}{strike_formatted}"
 
+def parse_occ_symbol(occ_symbol):
+    """Parses an OCC option symbol into its components."""
+    try:
+        symbol = occ_symbol[:6].strip()
+        date_str = occ_symbol[6:12]
+        option_type = occ_symbol[12]
+        strike_str = occ_symbol[13:]
+
+        expiry = datetime.strptime(date_str, '%y%m%d').strftime('%Y-%m-%d')
+        strike = float(strike_str) / 1000.0
+
+        return {'symbol': symbol, 'expiry': expiry, 'type': option_type, 'strike': strike}
+    except Exception as e:
+        # This can fail if the symbol format is unexpected.
+        # We don't want to crash the client, so we'll log it and return None.
+        print(f"\nWarning: Could not parse OCC symbol '{occ_symbol}': {e}")
+        return None
+
 def check_for_existing_order(client, account_hash, symbol, option_type, strike_price, expiry_date):
     """Check for existing working orders for the same option."""
     print("\nChecking for existing working orders...")
@@ -86,17 +104,23 @@ def check_for_existing_order(client, account_hash, symbol, option_type, strike_p
     existing_orders = orders_response.get('data', [])
     working_statuses = ['WORKING', 'QUEUED', 'ACCEPTED', 'PENDING_ACTIVATION']
 
-    new_order_occ_symbol = format_occ_symbol(symbol, expiry_date, strike_price, option_type)
-
     for order in existing_orders:
         if order.get('status') in working_statuses:
             for leg in order.get('orderLegCollection', []):
                 instrument = leg.get('instrument', {})
                 if instrument.get('assetType') == 'OPTION':
                     occ_symbol = instrument.get('symbol')
-                    if occ_symbol == new_order_occ_symbol:
-                        print(f"Found a matching working order: {order.get('orderId')}")
-                        return order
+                    parsed_symbol = parse_occ_symbol(occ_symbol)
+
+                    if parsed_symbol:
+                        # Compare the components of the parsed symbol with the new order's parameters
+                        if (parsed_symbol['symbol'] == symbol.upper() and
+                            parsed_symbol['expiry'] == expiry_date and
+                            parsed_symbol['type'] == option_type.upper() and
+                            abs(parsed_symbol['strike'] - strike_price) < 0.001):
+
+                            print(f"Found a matching working order: {order.get('orderId')}")
+                            return order
 
     print("No matching working orders found.")
     return None
