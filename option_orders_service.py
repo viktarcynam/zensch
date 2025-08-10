@@ -442,14 +442,16 @@ class OptionOrdersService:
                 "error": f"Failed to get option order details: {str(e)}"
             }
     
-    def get_option_orders(self, account_id: str, status: str = None, max_results: int = 3000) -> Dict[str, Any]:
+    def get_option_orders(self, account_id: str, status: str = None, max_results: int = 3000, from_entered_time: str = None, to_entered_time: str = None) -> Dict[str, Any]:
         """
-        Get all option orders for an account, optionally filtered by status.
+        Get all option orders for an account, optionally filtered by status and time.
         
         Args:
             account_id: Account ID to get orders for
-            status: Optional status filter (OPEN, FILLED, CANCELLED, etc.)
+            status: Optional status filter.
             max_results: The maximum number of orders to retrieve.
+            from_entered_time: ISO format string for the start time.
+            to_entered_time: ISO format string for the end time.
             
         Returns:
             Dictionary with orders or error information
@@ -465,8 +467,9 @@ class OptionOrdersService:
             logger.info(f"Getting option orders for account {account_id}")
             
             # Get orders
-            to_date = datetime.now()
-            from_date = to_date - timedelta(days=90)
+            to_date = datetime.fromisoformat(to_entered_time) if to_entered_time else datetime.now()
+            from_date = datetime.fromisoformat(from_entered_time) if from_entered_time else to_date - timedelta(days=90)
+
             response = self.schwab_client.account_orders(account_id, from_date, to_date, status=status, maxResults=max_results)
             
             # Process the response and filter for option orders only

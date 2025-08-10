@@ -468,14 +468,16 @@ class StockOrdersService:
                 "error": f"Failed to get stock order details: {str(e)}"
             }
     
-    def get_stock_orders(self, account_id: str, status: str = None, max_results: int = 3000) -> Dict[str, Any]:
+    def get_stock_orders(self, account_id: str, status: str = None, max_results: int = 3000, from_entered_time: str = None, to_entered_time: str = None) -> Dict[str, Any]:
         """
-        Get all stock orders for an account, optionally filtered by status.
+        Get all stock orders for an account, optionally filtered by status and time.
         
         Args:
             account_id: Account ID to get orders for
-            status: Optional status filter (OPEN, FILLED, CANCELLED, etc.)
+            status: Optional status filter.
             max_results: The maximum number of orders to retrieve.
+            from_entered_time: ISO format string for the start time.
+            to_entered_time: ISO format string for the end time.
             
         Returns:
             Dictionary with orders or error information
@@ -491,8 +493,8 @@ class StockOrdersService:
             logger.info(f"Getting stock orders for account {account_id}")
             
             # Get orders
-            to_date = datetime.now()
-            from_date = to_date - timedelta(days=90)
+            to_date = datetime.fromisoformat(to_entered_time) if to_entered_time else datetime.now()
+            from_date = datetime.fromisoformat(from_entered_time) if from_entered_time else to_date - timedelta(days=90)
             response = self.schwab_client.account_orders(account_id, from_date, to_date, status=status, maxResults=max_results)
             
             # Process the response
