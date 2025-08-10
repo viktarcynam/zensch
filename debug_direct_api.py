@@ -87,6 +87,25 @@ def main():
     except Exception as e:
         print(f"\nAn error occurred during API Call 2: {e}")
 
+    # --- API Call 3: Get Order by ID ---
+    try:
+        print("\n--- Making API Call 3: Get Order by ID ---")
+        order_id_to_check = input("Enter an Order ID to get details (or press Enter to skip): ").strip()
+
+        if order_id_to_check:
+            order_details = client.order_details(account_hash, order_id_to_check)
+
+            print(f"\n--- Raw Response (Order ID: {order_id_to_check}) ---")
+            if order_details.ok:
+                print(json.dumps(order_details.json(), indent=2))
+            else:
+                print(f"Error: {order_details.status_code} - {order_details.text}")
+        else:
+            print("Skipping API Call 3.")
+
+    except Exception as e:
+        print(f"\nAn error occurred during API Call 3: {e}")
+
 
 if __name__ == "__main__":
     main()
