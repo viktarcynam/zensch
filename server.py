@@ -457,7 +457,8 @@ class SchwabServer:
                 # Get stock orders
                 account_id = request['account_id']
                 status = request.get('status')
-                result = stock_orders_service.get_stock_orders(account_id, status)
+                max_results = request.get('max_results')
+                result = stock_orders_service.get_stock_orders(account_id, status, max_results)
                 result['timestamp'] = timestamp
                 return result
                 
@@ -547,7 +548,8 @@ class SchwabServer:
                 # Get option orders
                 account_id = request['account_id']
                 status = request.get('status')
-                result = option_orders_service.get_option_orders(account_id, status)
+                max_results = request.get('max_results')
+                result = option_orders_service.get_option_orders(account_id, status, max_results)
                 result['timestamp'] = timestamp
                 return result
             

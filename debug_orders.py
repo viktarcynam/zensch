@@ -22,8 +22,8 @@ def main():
 
         print(f"Using account hash: {account_hash}")
 
-        # Fetch all recent option orders without a status filter
-        orders_response = client.get_option_orders(account_id=account_hash)
+        # Fetch all recent option orders without a status filter, but with a limit
+        orders_response = client.get_option_orders(account_id=account_hash, max_results=100)
 
         if orders_response.get('success'):
             print("\n--- Raw Order Data ---")

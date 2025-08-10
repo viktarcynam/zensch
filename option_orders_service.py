@@ -442,13 +442,14 @@ class OptionOrdersService:
                 "error": f"Failed to get option order details: {str(e)}"
             }
     
-    def get_option_orders(self, account_id: str, status: str = None) -> Dict[str, Any]:
+    def get_option_orders(self, account_id: str, status: str = None, max_results: int = 3000) -> Dict[str, Any]:
         """
         Get all option orders for an account, optionally filtered by status.
         
         Args:
             account_id: Account ID to get orders for
             status: Optional status filter (OPEN, FILLED, CANCELLED, etc.)
+            max_results: The maximum number of orders to retrieve.
             
         Returns:
             Dictionary with orders or error information
@@ -466,7 +467,7 @@ class OptionOrdersService:
             # Get orders
             to_date = datetime.now()
             from_date = to_date - timedelta(days=90)
-            response = self.schwab_client.account_orders(account_id, from_date, to_date, status=status)
+            response = self.schwab_client.account_orders(account_id, from_date, to_date, status=status, maxResults=max_results)
             
             # Process the response and filter for option orders only
             if hasattr(response, 'json'):
