@@ -66,7 +66,7 @@ def check_for_existing_order(client, account_hash, symbol, option_type, strike_p
     """Check for existing working orders for the same option using discrete fields."""
     print("\nChecking for existing working orders...")
     # Get the last 100 orders, should be enough to find recent working ones.
-    orders_response = client.get_option_orders(account_id=account_hash, status='WORKING', max_results=100)
+    orders_response = client.get_option_orders(account_id=account_hash, status='WORKING', max_results=300)
 
     if not orders_response.get('success'):
         print("Could not retrieve existing orders.")
