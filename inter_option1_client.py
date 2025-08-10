@@ -61,41 +61,12 @@ def poll_order_status(client, account_hash, order_id):
             print(f"\nOrder not filled. Status: {status}")
             return None
 
-def format_occ_symbol(symbol, expiration_date, strike_price, option_type_char):
-    """Formats the option parameters into an OCC-compliant symbol."""
-    symbol_padded = symbol.ljust(6)
-
-    exp_date = datetime.strptime(expiration_date, '%Y-%m-%d')
-    exp_date_formatted = exp_date.strftime('%y%m%d')
-
-    strike_int = int(strike_price)
-    strike_dec = int(round((strike_price - strike_int) * 1000))
-    strike_formatted = f"{strike_int:05d}{strike_dec:03d}"
-
-    return f"{symbol_padded}{exp_date_formatted}{option_type_char.upper()}{strike_formatted}"
-
-def parse_occ_symbol(occ_symbol):
-    """Parses an OCC option symbol into its components."""
-    try:
-        symbol = occ_symbol[:6].strip()
-        date_str = occ_symbol[6:12]
-        option_type = occ_symbol[12]
-        strike_str = occ_symbol[13:]
-
-        expiry = datetime.strptime(date_str, '%y%m%d').strftime('%Y-%m-%d')
-        strike = float(strike_str) / 1000.0
-
-        return {'symbol': symbol, 'expiry': expiry, 'type': option_type, 'strike': strike}
-    except Exception as e:
-        # This can fail if the symbol format is unexpected.
-        # We don't want to crash the client, so we'll log it and return None.
-        print(f"\nWarning: Could not parse OCC symbol '{occ_symbol}': {e}")
-        return None
 
 def check_for_existing_order(client, account_hash, symbol, option_type, strike_price, expiry_date):
-    """Check for existing working orders for the same option."""
+    """Check for existing working orders for the same option using discrete fields."""
     print("\nChecking for existing working orders...")
-    orders_response = client.get_option_orders(account_id=account_hash, status='WORKING', max_results=100)
+    # Get the last 100 orders, should be enough to find recent working ones.
+    orders_response = client.get_option_orders(account_id=account_hash, max_results=100)
 
     if not orders_response.get('success'):
         print("Could not retrieve existing orders.")
@@ -104,23 +75,42 @@ def check_for_existing_order(client, account_hash, symbol, option_type, strike_p
     existing_orders = orders_response.get('data', [])
     working_statuses = ['WORKING', 'QUEUED', 'ACCEPTED', 'PENDING_ACTIVATION']
 
+    # The option_type from user input is 'C' or 'P'. Convert to full name for comparison.
+    option_type_full = "CALL" if option_type.upper() == 'C' else "PUT"
+
     for order in existing_orders:
         if order.get('status') in working_statuses:
             for leg in order.get('orderLegCollection', []):
                 instrument = leg.get('instrument', {})
-                if instrument.get('assetType') == 'OPTION':
-                    occ_symbol = instrument.get('symbol')
-                    parsed_symbol = parse_occ_symbol(occ_symbol)
 
-                    if parsed_symbol:
-                        # Compare the components of the parsed symbol with the new order's parameters
-                        if (parsed_symbol['symbol'] == symbol.upper() and
-                            parsed_symbol['expiry'] == expiry_date and
-                            parsed_symbol['type'] == option_type.upper() and
-                            abs(parsed_symbol['strike'] - strike_price) < 0.001):
+                if instrument.get('assetType') == 'OPTION':
+                    # Extract details from the instrument object
+                    underlying = instrument.get('underlyingSymbol')
+                    put_call = instrument.get('putCall')
+                    description = instrument.get('description', '')
+
+                    # Parse description for strike and expiry
+                    # Example: "WEBULL CORP 08/15/2025 $15.5 Put"
+                    try:
+                        desc_parts = description.split(' ')
+                        desc_expiry_str = desc_parts[-3]
+                        desc_strike_str = desc_parts[-2].replace('$', '')
+
+                        desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
+                        desc_strike = float(desc_strike_str)
+
+                        # Compare the components
+                        if (underlying == symbol.upper() and
+                            put_call == option_type_full and
+                            desc_expiry == expiry_date and
+                            abs(desc_strike - strike_price) < 0.001):
 
                             print(f"Found a matching working order: {order.get('orderId')}")
                             return order
+
+                    except (ValueError, IndexError):
+                        # Could not parse this description, skip to the next leg/order.
+                        continue
 
     print("No matching working orders found.")
     return None
