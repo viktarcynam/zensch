@@ -14,6 +14,8 @@ logger = logging.getLogger('option_orders_service')
 
 # Import the order logging function from stock_orders_service
 from stock_orders_service import log_order_to_db
+from state_manager import state_manager
+from account_service import AccountService
 
 # Valid parameter values for validation
 VALID_ORDER_TYPES = ["MARKET", "LIMIT", "STOP", "STOP_LIMIT"]
@@ -25,36 +27,40 @@ VALID_OPTION_TYPES = ["CALL", "PUT"]
 class OptionOrdersService:
     """Service for handling option order operations."""
     
-    def __init__(self, schwab_client=None):
+    def __init__(self, schwab_client=None, account_service=None):
         """
         Initialize the option orders service.
         
         Args:
             schwab_client: Authenticated schwabdev client instance
+            account_service: Instance of AccountService
         """
         self.schwab_client = schwab_client
+        self.account_service = account_service
         logger.info("Option orders service initialized")
     
-    def set_client(self, schwab_client):
+    def set_client(self, schwab_client, account_service=None):
         """
         Set the schwabdev client instance.
         
         Args:
             schwab_client: Authenticated schwabdev client instance
+            account_service: Instance of AccountService
         """
         self.schwab_client = schwab_client
+        if account_service:
+            self.account_service = account_service
         logger.info("Schwab client set in option orders service")
     
-    def place_option_order(self, account_id: str, symbol: str, option_type: str,
+    def place_option_order(self, symbol: str, option_type: str,
                           expiration_date: str, strike_price: float, quantity: int,
                           side: str, order_type: str = "LIMIT", price: float = None,
                           stop_price: float = None, duration: str = "DAY",
-                          session: str = "NORMAL") -> Dict[str, Any]:
+                          session: str = "NORMAL", account_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Place an option order. Default order type is LIMIT.
         
         Args:
-            account_id: Account ID to place the order for
             symbol: Underlying stock symbol
             option_type: Option type (CALL or PUT)
             expiration_date: Option expiration date in format YYYY-MM-DD
@@ -78,6 +84,19 @@ class OptionOrdersService:
             }
         
         try:
+            if not account_id:
+                if not self.account_service:
+                    return {
+                        "success": False,
+                        "error": "Account service not initialized."
+                    }
+                account_id = state_manager.get_primary_account_hash(self.account_service)
+                if not account_id:
+                    return {
+                        "success": False,
+                        "error": "Could not determine account ID. Please specify one."
+                    }
+
             # Format the option symbol
             option_symbol = self._format_option_symbol(symbol, expiration_date, strike_price, option_type)
             
