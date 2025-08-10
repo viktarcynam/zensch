@@ -77,7 +77,7 @@ def format_occ_symbol(symbol, expiration_date, strike_price, option_type_char):
 def check_for_existing_order(client, account_hash, symbol, option_type, strike_price, expiry_date):
     """Check for existing working orders for the same option."""
     print("\nChecking for existing working orders...")
-    orders_response = client.get_option_orders(account_id=account_hash)
+    orders_response = client.get_option_orders(account_id=account_hash, status='WORKING')
 
     if not orders_response.get('success'):
         print("Could not retrieve existing orders.")
