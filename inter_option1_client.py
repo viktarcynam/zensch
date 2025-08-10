@@ -58,17 +58,25 @@ def main():
 
                 # Get last price
                 quotes_response = client.get_quotes(symbols=[symbol])
-                if not quotes_response.get('success') or not quotes_response.get('quotes'):
+                if not quotes_response.get('success') or not quotes_response.get('data'):
                     print(f"Could not retrieve quote for {symbol}.")
                     continue
 
-                quote = quotes_response['quotes'].get(symbol)
-                if not quote or 'lastPrice' not in quote.get('quote', {}):
-                    print(f"Could not retrieve last price for {symbol}.")
+                # The data is a list of strings, get the first one
+                quote_string = quotes_response['data'][0]
+                parts = quote_string.split()
+
+                # Expected format: symbol lastPrice bidPrice askPrice totalVolume
+                if len(parts) < 2 or parts[0] != symbol:
+                    print(f"Unexpected quote format for {symbol}.")
                     continue
 
-                last_price = quote['quote']['lastPrice']
-                print(f"Last price for {symbol}: {last_price}")
+                try:
+                    last_price = float(parts[1])
+                    print(f"Last price for {symbol}: {last_price}")
+                except (ValueError, IndexError):
+                    print(f"Could not parse last price for {symbol}.")
+                    continue
 
                 # Get suggested strike and expiry
                 suggested_strike = get_nearest_strike(last_price)
