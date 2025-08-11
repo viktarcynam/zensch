@@ -134,7 +134,7 @@ class SchwabClient:
             self.socket.send(request_json.encode('utf-8'))
             
             # Receive response
-            response_data = self.socket.recv(8192)  # Increased buffer size for larger responses
+            response_data = self.socket.recv(131072)  # Increased buffer size for larger responses
             response = json.loads(response_data.decode('utf-8'))
             
             return response
@@ -574,13 +574,16 @@ class SchwabClient:
         
         return self.send_request(request)
     
-    def get_stock_orders(self, account_id: str, status: str = None) -> Dict[str, Any]:
+    def get_stock_orders(self, account_id: str, status: str = None, max_results: int = None, from_entered_time: str = None, to_entered_time: str = None) -> Dict[str, Any]:
         """
-        Get all stock orders for an account, optionally filtered by status.
+        Get all stock orders for an account, optionally filtered by status and time.
         
         Args:
             account_id: Account ID to get orders for
-            status: Optional status filter (OPEN, FILLED, CANCELLED, etc.)
+            status: Optional status filter.
+            max_results: The maximum number of orders to retrieve.
+            from_entered_time: ISO format string for the start time.
+            to_entered_time: ISO format string for the end time.
             
         Returns:
             Dict containing orders
@@ -592,6 +595,12 @@ class SchwabClient:
         
         if status:
             request['status'] = status
+        if max_results:
+            request['max_results'] = max_results
+        if from_entered_time:
+            request['from_entered_time'] = from_entered_time
+        if to_entered_time:
+            request['to_entered_time'] = to_entered_time
         
         return self.send_request(request)
     
@@ -731,13 +740,16 @@ class SchwabClient:
         
         return self.send_request(request)
     
-    def get_option_orders(self, account_id: str, status: str = None) -> Dict[str, Any]:
+    def get_option_orders(self, account_id: str, status: str = None, max_results: int = None, from_entered_time: str = None, to_entered_time: str = None) -> Dict[str, Any]:
         """
-        Get all option orders for an account, optionally filtered by status.
+        Get all option orders for an account, optionally filtered by status and time.
         
         Args:
             account_id: Account ID to get orders for
-            status: Optional status filter (OPEN, FILLED, CANCELLED, etc.)
+            status: Optional status filter.
+            max_results: The maximum number of orders to retrieve.
+            from_entered_time: ISO format string for the start time.
+            to_entered_time: ISO format string for the end time.
             
         Returns:
             Dict containing orders
@@ -749,6 +761,12 @@ class SchwabClient:
         
         if status:
             request['status'] = status
+        if max_results:
+            request['max_results'] = max_results
+        if from_entered_time:
+            request['from_entered_time'] = from_entered_time
+        if to_entered_time:
+            request['to_entered_time'] = to_entered_time
         
         return self.send_request(request)
 

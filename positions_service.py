@@ -1,3 +1,4 @@
+# JULES: VERSION CHECK 2025-08-10 19:02
 """
 Positions service module for retrieving Schwab account positions.
 """
@@ -170,7 +171,9 @@ class PositionsService:
                 'dayChangePercent': position.get('currentDayProfitLossPercentage', 0.0),
                 'totalProfitLoss': position.get('longQuantity', 0.0) * position.get('averagePrice', 0.0) - position.get('marketValue', 0.0),
                 'cusip': instrument.get('cusip', ''),
-                'instrumentType': instrument.get('type', 'Unknown')
+                'instrumentType': instrument.get('type', 'Unknown'),
+                'underlyingSymbol': instrument.get('underlyingSymbol', ''),
+                'putCall': instrument.get('putCall', '')
             }
             
             # Calculate total profit/loss percentage
@@ -218,7 +221,7 @@ class PositionsService:
             for account in positions_result['data']['accounts']:
                 account_positions = []
                 for position in account['positions']:
-                    if position['symbol'].upper() == symbol.upper():
+                    if position['symbol'].upper() == symbol.upper() or position['underlyingSymbol'].upper() == symbol.upper():
                         account_positions.append(position)
                         filtered_positions['total_quantity'] += position['quantity']
                         filtered_positions['total_market_value'] += position['marketValue']

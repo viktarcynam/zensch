@@ -6,7 +6,7 @@ Handles option order operations using the schwabdev library.
 import logging
 import sqlite3
 from typing import Dict, Any, Optional, Union, List
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -104,8 +104,8 @@ class OptionOrdersService:
             if order_type == "LIMIT" and price is None:
                 try:
                     # Get current option chain for the symbol to use as limit price
-                    chain_response = self.schwab_client.get_option_chain(
-                        symbol, 
+                    chain_response = self.schwab_client.option_chains(
+                        symbol,
                         contractType=option_type,
                         strike=strike_price,
                         fromDate=expiration_date,
@@ -154,10 +154,11 @@ class OptionOrdersService:
             # Get underlying stock price for logging
             underlying_price = None
             try:
-                quote_response = self.schwab_client.get_quote(symbol)
+                quote_response = self.schwab_client.quote(symbol)
                 if hasattr(quote_response, 'json'):
                     quote_data = quote_response.json()
-                    underlying_price = quote_data.get('lastPrice')
+                    if symbol in quote_data and 'quote' in quote_data[symbol]:
+                         underlying_price = quote_data[symbol]['quote'].get('lastPrice')
             except Exception as quote_error:
                 logger.warning(f"Error getting underlying stock price: {str(quote_error)}")
             
@@ -192,22 +193,15 @@ class OptionOrdersService:
                 order_params["stopPrice"] = stop_price
             
             # Place the order
-            response = self.schwab_client.place_order(account_id, order_params)
+            response = self.schwab_client.order_place(account_id, order_params)
             
             # Process the response
-            if hasattr(response, 'json'):
-                order_data = response.json()
-                logger.info(f"Successfully placed option order for {option_symbol}")
-                
-                # Extract order ID from response
-                order_id = None
-                if 'orderId' in order_data:
-                    order_id = order_data['orderId']
-                elif 'order_id' in order_data:
-                    order_id = order_data['order_id']
-                
-                # Log order to database
-                if order_id:
+            if response.ok:
+                order_id = response.headers.get('location', '/').split('/')[-1]
+                if order_id and order_id.isdigit():
+                    logger.info(f"Successfully placed option order for {option_symbol}, order ID: {order_id}")
+
+                    # Log order to database
                     log_data = {
                         'order_id': order_id,
                         'account_id': account_id,
@@ -226,46 +220,26 @@ class OptionOrdersService:
                         'time_executed': datetime.now().isoformat()
                     }
                     log_order_to_db(log_data)
-                
-                return {
-                    "success": True,
-                    "data": order_data,
-                    "message": f"Option order for {option_symbol} placed successfully"
-                }
+
+                    return {
+                        "success": True,
+                        "data": {"order_id": order_id},
+                        "message": f"Option order for {option_symbol} placed successfully"
+                    }
+                else:
+                    # Handle cases where order might be filled immediately and no location header is returned
+                    logger.info("Order placed, but no order ID returned in location header. It may have filled immediately.")
+                    return {
+                        "success": True,
+                        "data": response.json() if response.content else {},
+                        "message": "Order placed, but no order ID returned. It may have filled immediately."
+                    }
             else:
-                # Handle case where response is already parsed
-                logger.info(f"Successfully placed option order for {option_symbol}")
-                
-                # Extract order ID from response if possible
-                order_id = None
-                if hasattr(response, 'get'):
-                    order_id = response.get('orderId') or response.get('order_id')
-                
-                # Log order to database
-                if order_id:
-                    log_data = {
-                        'order_id': order_id,
-                        'account_id': account_id,
-                        'symbol': symbol,
-                        'instrument_type': 'OPTION',
-                        'option_type': option_type,
-                        'expiration_date': expiration_date,
-                        'strike_price': strike_price,
-                        'side': side,
-                        'quantity': quantity,
-                        'order_type': order_type,
-                        'limit_price': price,
-                        'stop_price': stop_price,
-                        'underlying_price': underlying_price,
-                        'status': 'PLACED',
-                        'time_executed': datetime.now().isoformat()
-                    }
-                    log_order_to_db(log_data)
-                
+                error_msg = f"Failed to place option order: {response.status_code} - {response.text}"
+                logger.error(error_msg)
                 return {
-                    "success": True,
-                    "data": response,
-                    "message": f"Option order for {option_symbol} placed successfully"
+                    "success": False,
+                    "error": error_msg
                 }
                 
         except Exception as e:
@@ -297,7 +271,7 @@ class OptionOrdersService:
             logger.info(f"Cancelling option order {order_id} for account {account_id}")
             
             # Cancel the order
-            response = self.schwab_client.cancel_order(account_id, order_id)
+            response = self.schwab_client.order_cancel(account_id, order_id)
             
             # Process the response
             if hasattr(response, 'status_code'):
@@ -394,24 +368,23 @@ class OptionOrdersService:
                 order_params["stopPrice"] = stop_price
             
             # Replace the order
-            response = self.schwab_client.replace_order(account_id, order_id, order_params)
+            response = self.schwab_client.order_replace(account_id, order_id, order_params)
             
             # Process the response
-            if hasattr(response, 'json'):
-                order_data = response.json()
-                logger.info(f"Successfully replaced option order for {option_symbol}")
+            if response.ok:
+                new_order_id = response.headers.get('location', '/').split('/')[-1]
+                logger.info(f"Successfully replaced option order. New order ID: {new_order_id}")
                 return {
                     "success": True,
-                    "data": order_data,
-                    "message": f"Option order for {option_symbol} replaced successfully"
+                    "data": {"new_order_id": new_order_id},
+                    "message": f"Option order for {option_symbol} replaced successfully."
                 }
             else:
-                # Handle case where response is already parsed
-                logger.info(f"Successfully replaced option order for {option_symbol}")
+                error_msg = f"Failed to replace option order: {response.status_code} - {response.text}"
+                logger.error(error_msg)
                 return {
-                    "success": True,
-                    "data": response,
-                    "message": f"Option order for {option_symbol} replaced successfully"
+                    "success": False,
+                    "error": error_msg
                 }
                 
         except Exception as e:
@@ -443,7 +416,7 @@ class OptionOrdersService:
             logger.info(f"Getting details for option order {order_id} in account {account_id}")
             
             # Get order details
-            response = self.schwab_client.get_order(account_id, order_id)
+            response = self.schwab_client.order_details(account_id, order_id)
             
             # Process the response
             if hasattr(response, 'json'):
@@ -468,13 +441,16 @@ class OptionOrdersService:
                 "error": f"Failed to get option order details: {str(e)}"
             }
     
-    def get_option_orders(self, account_id: str, status: str = None) -> Dict[str, Any]:
+    def get_option_orders(self, account_id: str, status: str = None, max_results: int = 3000, from_entered_time: str = None, to_entered_time: str = None) -> Dict[str, Any]:
         """
-        Get all option orders for an account, optionally filtered by status.
+        Get all option orders for an account, optionally filtered by status and time.
         
         Args:
             account_id: Account ID to get orders for
-            status: Optional status filter (OPEN, FILLED, CANCELLED, etc.)
+            status: Optional status filter.
+            max_results: The maximum number of orders to retrieve.
+            from_entered_time: ISO format string for the start time.
+            to_entered_time: ISO format string for the end time.
             
         Returns:
             Dictionary with orders or error information
@@ -490,7 +466,10 @@ class OptionOrdersService:
             logger.info(f"Getting option orders for account {account_id}")
             
             # Get orders
-            response = self.schwab_client.get_orders(account_id, status=status)
+            to_date = datetime.fromisoformat(to_entered_time) if to_entered_time else datetime.now(timezone.utc)
+            from_date = datetime.fromisoformat(from_entered_time) if from_entered_time else to_date - timedelta(days=90)
+
+            response = self.schwab_client.account_orders(account_id, from_date, to_date, status=status, maxResults=max_results)
             
             # Process the response and filter for option orders only
             if hasattr(response, 'json'):
@@ -717,26 +696,29 @@ class OptionOrdersService:
     def _format_option_symbol(self, symbol: str, expiration_date: str, strike_price: float, option_type: str) -> str:
         """
         Format an option symbol in the format expected by Schwab API.
-        
-        Args:
-            symbol: Underlying stock symbol
-            expiration_date: Option expiration date in format YYYY-MM-DD
-            strike_price: Option strike price
-            option_type: Option type (CALL or PUT)
-            
-        Returns:
-            Formatted option symbol
+        Format: Underlying Symbol (6 chars, pad with spaces) +
+                Expiration (YYMMDD) +
+                Call/Put (C/P) +
+                Strike Price (8 chars, 5 for integer part, 3 for decimal, pad with zeros)
         """
         # Parse the expiration date
         exp_date = datetime.strptime(expiration_date, '%Y-%m-%d')
-        
-        # Format the option symbol
-        # Note: This is a simplified version - actual format may vary by broker
-        # Format: Symbol_YYMMDD_Strike_Type
-        # Example: AAPL_240621_150_C
-        formatted_symbol = f"{symbol}_{exp_date.strftime('%y%m%d')}_{int(strike_price)}_{option_type[0]}"
-        
-        return formatted_symbol
+
+        # Format symbol (6 chars, right-padded with spaces)
+        symbol_padded = symbol.ljust(6)
+
+        # Format expiration date (YYMMDD)
+        exp_date_formatted = exp_date.strftime('%y%m%d')
+
+        # Format strike price (8 chars, 5 for int, 3 for dec)
+        strike_int = int(strike_price)
+        strike_dec = int(round((strike_price - strike_int) * 1000))
+        strike_formatted = f"{strike_int:05d}{strike_dec:03d}"
+
+        # Format option type (C/P)
+        option_type_char = option_type[0].upper()
+
+        return f"{symbol_padded}{exp_date_formatted}{option_type_char}{strike_formatted}"
     
     def _is_option_order(self, order: Dict[str, Any]) -> bool:
         """
