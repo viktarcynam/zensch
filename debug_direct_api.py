@@ -57,9 +57,16 @@ def main():
             maxResults=10
         )
 
-        print("\n--- Raw Response (max_results=10) ---")
+        print("\n--- Summary (max_results=10) ---")
         if orders_max_results.ok:
-            print(json.dumps(orders_max_results.json(), indent=2))
+            orders = orders_max_results.json()
+            if orders:
+                for order in orders:
+                    print(f"  - Order ID: {order.get('orderId')}, Status: {order.get('status')}")
+            else:
+                print("  No orders found.")
+            print("\n--- Raw Response (max_results=10) ---")
+            print(json.dumps(orders, indent=2))
         else:
             print(f"Error: {orders_max_results.status_code} - {orders_max_results.text}")
 
@@ -78,9 +85,16 @@ def main():
             toEnteredTime=to_time_tw
         )
 
-        print("\n--- Raw Response (last 24 hours) ---")
+        print("\n--- Summary (last 24 hours) ---")
         if orders_time_window.ok:
-            print(json.dumps(orders_time_window.json(), indent=2))
+            orders = orders_time_window.json()
+            if orders:
+                for order in orders:
+                    print(f"  - Order ID: {order.get('orderId')}, Status: {order.get('status')}")
+            else:
+                print("  No orders found.")
+            print("\n--- Raw Response (last 24 hours) ---")
+            print(json.dumps(orders, indent=2))
         else:
             print(f"Error: {orders_time_window.status_code} - {orders_time_window.text}")
 
