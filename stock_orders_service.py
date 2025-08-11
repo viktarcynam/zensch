@@ -6,7 +6,7 @@ Handles stock order operations using the schwabdev library.
 import logging
 import sqlite3
 from typing import Dict, Any, Optional, Union, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from state_manager import state_manager
 from account_service import AccountService
 
@@ -493,7 +493,7 @@ class StockOrdersService:
             logger.info(f"Getting stock orders for account {account_id}")
             
             # Get orders
-            to_date = datetime.fromisoformat(to_entered_time) if to_entered_time else datetime.now()
+            to_date = datetime.fromisoformat(to_entered_time) if to_entered_time else datetime.now(timezone.utc)
             from_date = datetime.fromisoformat(from_entered_time) if from_entered_time else to_date - timedelta(days=90)
             response = self.schwab_client.account_orders(account_id, from_date, to_date, status=status, maxResults=max_results)
             

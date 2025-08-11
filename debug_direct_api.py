@@ -1,6 +1,6 @@
 import json
 import schwabdev
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from config import config
 
 def main():
@@ -47,7 +47,7 @@ def main():
     # --- API Call 1: Max Results ---
     try:
         print("\n--- Making API Call 1: 10 Most Recent Orders ---")
-        to_time_mr = datetime.now()
+        to_time_mr = datetime.now(timezone.utc)
         from_time_mr = to_time_mr - timedelta(days=90) # Use a wide window for recency
 
         orders_max_results = client.account_orders(
@@ -76,7 +76,7 @@ def main():
     # --- API Call 2: Time Window ---
     try:
         print("\n--- Making API Call 2: Last 24 Hours ---")
-        to_time_tw = datetime.now()
+        to_time_tw = datetime.now(timezone.utc)
         from_time_tw = to_time_tw - timedelta(hours=24)
 
         orders_time_window = client.account_orders(

@@ -6,7 +6,7 @@ Handles option order operations using the schwabdev library.
 import logging
 import sqlite3
 from typing import Dict, Any, Optional, Union, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -467,7 +467,7 @@ class OptionOrdersService:
             logger.info(f"Getting option orders for account {account_id}")
             
             # Get orders
-            to_date = datetime.fromisoformat(to_entered_time) if to_entered_time else datetime.now()
+            to_date = datetime.fromisoformat(to_entered_time) if to_entered_time else datetime.now(timezone.utc)
             from_date = datetime.fromisoformat(from_entered_time) if from_entered_time else to_date - timedelta(days=90)
 
             response = self.schwab_client.account_orders(account_id, from_date, to_date, status=status, maxResults=max_results)
