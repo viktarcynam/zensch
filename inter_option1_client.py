@@ -318,8 +318,8 @@ def main():
 
                 # Display positions
                 positions_response = client.get_positions_by_symbol(symbol=symbol, account_hash=account_hash)
-                if positions_response.get('success') and positions_response.get('positions'):
-                    positions = positions_response.get('positions')
+                if positions_response.get('success') and positions_response.get('data'):
+                    positions = positions_response.get('data')
                     position_strings = []
                     for pos in positions:
                         qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
