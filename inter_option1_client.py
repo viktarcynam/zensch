@@ -318,6 +318,8 @@ def main():
 
                 # Display positions
                 positions_response = client.get_positions_by_symbol(symbol=symbol, account_hash=account_hash)
+                print(f"\nDEBUG: Client received positions response type: {type(positions_response)}")
+                print(f"DEBUG: Client received positions response data: {positions_response}\n")
                 if positions_response.get('success') and positions_response.get('data'):
                     positions = positions_response.get('data')
                     position_strings = []
