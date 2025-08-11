@@ -195,8 +195,7 @@ def poll_order_status(client, account_hash, order_id):
                     strike=instrument_details['strike'],
                     fromDate=instrument_details['expiry'],
                     toDate=instrument_details['expiry'],
-                    contractType='ALL',
-                    strikeCount=1
+                    contractType='ALL'
                 )
 
                 if option_chain_response.get('success') and option_chain_response.get('data'):
@@ -322,8 +321,7 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
                     strike=strike_price,
                     fromDate=expiry_date,
                     toDate=expiry_date,
-                    contractType='ALL',
-                    strikeCount=1
+                    contractType='ALL'
                 )
 
                 if closing_option_chain_response.get('success') and closing_option_chain_response.get('data'):
@@ -494,13 +492,8 @@ def main():
                     strike=strike_price,
                     fromDate=expiry_date,
                     toDate=expiry_date,
-                    contractType='ALL',
-                    strikeCount=1
+                    contractType='ALL'
                 )
-
-                print("\n--- START DEBUG: RAW OPTION CHAIN RESPONSE ---")
-                print(json.dumps(option_chain_response, indent=2))
-                print("--- END DEBUG: RAW OPTION CHAIN RESPONSE ---\n")
 
                 if not option_chain_response.get('success') or not option_chain_response.get('data'):
                     print(f"Could not retrieve option chain: {option_chain_response.get('error')}")
