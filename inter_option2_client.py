@@ -11,7 +11,9 @@ def print_response(title: str, response: dict):
     print(json.dumps(response, indent=2))
 
 def format_price(price):
-    """Formats a price to two decimal places with a leading zero."""
+    """Formats a price to two decimal places with a leading zero. Handles None safely."""
+    if price is None:
+        return "N/A"
     return f"{price:.2f}"
 
 def get_account_hash(client):
