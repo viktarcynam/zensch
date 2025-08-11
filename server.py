@@ -187,7 +187,9 @@ class SchwabServer:
                     
                     # Send response
                     response_json = json.dumps(response, indent=2)
-                    client_socket.send(response_json.encode('utf-8'))
+                    response_bytes = response_json.encode('utf-8')
+                    header = len(response_bytes).to_bytes(4, byteorder='big')
+                    client_socket.sendall(header + response_bytes)
                     
                 except json.JSONDecodeError as e:
                     error_response = {
@@ -195,7 +197,9 @@ class SchwabServer:
                         'error': f'Invalid JSON format: {str(e)}',
                         'timestamp': datetime.now().isoformat()
                     }
-                    client_socket.send(json.dumps(error_response).encode('utf-8'))
+                    response_bytes = json.dumps(error_response).encode('utf-8')
+                    header = len(response_bytes).to_bytes(4, byteorder='big')
+                    client_socket.sendall(header + response_bytes)
                     
                 except Exception as e:
                     logger.error(f"Error processing request from {address}: {str(e)}")
@@ -204,7 +208,9 @@ class SchwabServer:
                         'error': f'Server error: {str(e)}',
                         'timestamp': datetime.now().isoformat()
                     }
-                    client_socket.send(json.dumps(error_response).encode('utf-8'))
+                    response_bytes = json.dumps(error_response).encode('utf-8')
+                    header = len(response_bytes).to_bytes(4, byteorder='big')
+                    client_socket.sendall(header + response_bytes)
                     
         except Exception as e:
             logger.error(f"Client handler error for {address}: {str(e)}")
