@@ -172,7 +172,8 @@ class PositionsService:
                 'totalProfitLoss': position.get('longQuantity', 0.0) * position.get('averagePrice', 0.0) - position.get('marketValue', 0.0),
                 'cusip': instrument.get('cusip', ''),
                 'instrumentType': instrument.get('type', 'Unknown'),
-                'underlyingSymbol': instrument.get('underlyingSymbol', '')
+                'underlyingSymbol': instrument.get('underlyingSymbol', ''),
+                'putCall': instrument.get('putCall', '')
             }
             
             # Calculate total profit/loss percentage

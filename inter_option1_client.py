@@ -327,14 +327,13 @@ def main():
                     for acc in accounts:
                         for pos in acc.get('positions', []):
                             qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
-                            instrument = pos.get('instrument', {})
 
-                            if instrument.get('assetType') == 'EQUITY':
+                            if pos.get('assetType') == 'EQUITY':
                                 stock_positions.append(f"STOCK: {int(qty)}")
-                            elif instrument.get('assetType') == 'OPTION':
+                            elif pos.get('assetType') == 'OPTION':
                                 try:
-                                    put_call = instrument.get('putCall')
-                                    description = instrument.get('description', '')
+                                    put_call = pos.get('putCall')
+                                    description = pos.get('description', '')
                                     desc_parts = description.split(' ')
                                     desc_expiry_str = desc_parts[-3]
                                     desc_strike_str = desc_parts[-2].replace('$', '')
