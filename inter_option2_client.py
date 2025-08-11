@@ -510,15 +510,29 @@ def main():
                 put_data = None
 
                 # Find the correct date key
-                date_key = next((key for key in call_map if key.startswith(expiry_date)), None)
-                if date_key:
-                    strike_map_call = call_map.get(date_key, {})
-                    call_data = strike_map_call.get(str(float(strike_price)), [None])[0]
+                date_key_call = next((key for key in call_map if key.startswith(expiry_date)), None)
+                if date_key_call:
+                    strike_map_call = call_map.get(date_key_call, {})
+                    # Robust strike lookup
+                    for key_str, option_list in strike_map_call.items():
+                        try:
+                            if abs(float(key_str) - strike_price) < 0.001:
+                                call_data = option_list[0] if option_list else None
+                                break
+                        except (ValueError, IndexError):
+                            continue
 
                 date_key_put = next((key for key in put_map if key.startswith(expiry_date)), None)
                 if date_key_put:
                     strike_map_put = put_map.get(date_key_put, {})
-                    put_data = strike_map_put.get(str(float(strike_price)), [None])[0]
+                    # Robust strike lookup
+                    for key_str, option_list in strike_map_put.items():
+                        try:
+                            if abs(float(key_str) - strike_price) < 0.001:
+                                put_data = option_list[0] if option_list else None
+                                break
+                        except (ValueError, IndexError):
+                            continue
 
                 if not call_data or not put_data:
                     print("Could not find option data for the specified strike and date.")
