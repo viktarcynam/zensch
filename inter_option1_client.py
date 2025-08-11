@@ -317,22 +317,43 @@ def main():
                 print(f"CALL:   {call_data['bid']}/{call_data['ask']}  PUT: {put_data['bid']}/{put_data['ask']}")
 
                 # Display positions
-                positions_response = client.get_positions_by_symbol(symbol=symbol, account_hash=account_hash)
+                stock_positions = []
+                option_positions = []
 
-                position_strings = []
+                positions_response = client.get_positions_by_symbol(symbol=symbol, account_hash=account_hash)
                 if positions_response.get('success') and positions_response.get('data'):
                     data = positions_response.get('data', {})
                     accounts = data.get('accounts', [])
                     for acc in accounts:
                         for pos in acc.get('positions', []):
                             qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
-                            desc = pos.get('description')
-                            if not desc:
-                                desc = pos.get('symbol')
-                            position_strings.append(f"{qty} of {desc}")
+                            instrument = pos.get('instrument', {})
 
-                if position_strings:
-                    print(f"Positions: {'; '.join(position_strings)}")
+                            if instrument.get('assetType') == 'EQUITY':
+                                stock_positions.append(f"STOCK: {int(qty)}")
+                            elif instrument.get('assetType') == 'OPTION':
+                                try:
+                                    put_call = instrument.get('putCall')
+                                    description = instrument.get('description', '')
+                                    desc_parts = description.split(' ')
+                                    desc_expiry_str = desc_parts[-3]
+                                    desc_strike_str = desc_parts[-2].replace('$', '')
+
+                                    desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
+                                    desc_strike = float(desc_strike_str)
+
+                                    qty_str = f"+{int(qty)}" if qty > 0 else str(int(qty))
+
+                                    option_positions.append(f"{qty_str} {put_call}; Strike: {desc_strike}; Expiry {desc_expiry}")
+                                except (ValueError, IndexError):
+                                    option_positions.append(f"{int(qty)} of {description}") # Fallback
+
+                if stock_positions or option_positions:
+                    print(f"\n{symbol.upper()} Positions:")
+                    for s_pos in stock_positions:
+                        print(s_pos)
+                    for o_pos in option_positions:
+                        print(o_pos)
                 else:
                     print("No positions for this symbol in this account.")
 
