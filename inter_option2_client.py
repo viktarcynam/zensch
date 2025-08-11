@@ -498,6 +498,10 @@ def main():
                     strikeCount=1
                 )
 
+                print("\n--- START DEBUG: RAW OPTION CHAIN RESPONSE ---")
+                print(json.dumps(option_chain_response, indent=2))
+                print("--- END DEBUG: RAW OPTION CHAIN RESPONSE ---\n")
+
                 if not option_chain_response.get('success') or not option_chain_response.get('data'):
                     print(f"Could not retrieve option chain: {option_chain_response.get('error')}")
                     continue
