@@ -397,21 +397,20 @@ class StockOrdersService:
             response = self.schwab_client.order_replace(account_id, order_id, order_params)
             
             # Process the response
-            if hasattr(response, 'json'):
-                order_data = response.json()
-                logger.info(f"Successfully replaced stock order for {symbol}")
+            if response.ok:
+                new_order_id = response.headers.get('location', '/').split('/')[-1]
+                logger.info(f"Successfully replaced stock order. New order ID: {new_order_id}")
                 return {
                     "success": True,
-                    "data": order_data,
-                    "message": f"Stock order for {symbol} replaced successfully"
+                    "data": {"new_order_id": new_order_id},
+                    "message": f"Stock order for {symbol} replaced successfully."
                 }
             else:
-                # Handle case where response is already parsed
-                logger.info(f"Successfully replaced stock order for {symbol}")
+                error_msg = f"Failed to replace stock order: {response.status_code} - {response.text}"
+                logger.error(error_msg)
                 return {
-                    "success": True,
-                    "data": response,
-                    "message": f"Stock order for {symbol} replaced successfully"
+                    "success": False,
+                    "error": error_msg
                 }
                 
         except Exception as e:
