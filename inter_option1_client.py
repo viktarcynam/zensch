@@ -63,54 +63,58 @@ def poll_order_status(client, account_hash, order_id):
 
 
 def check_for_existing_order(client, account_hash, symbol, option_type, strike_price, expiry_date):
-    """Check for existing working orders for the same option using discrete fields."""
+    """Check for existing working orders for the same option by making targeted API calls."""
     print("\nChecking for existing working orders...")
-    # Get the last 100 orders, should be enough to find recent working ones.
-    orders_response = client.get_option_orders(account_id=account_hash, status='WORKING', max_results=300)
 
-    if not orders_response.get('success'):
-        print("Could not retrieve existing orders.")
+    working_statuses_to_check = ['WORKING', 'PENDING_ACTIVATION']
+    all_working_orders = []
+
+    for status in working_statuses_to_check:
+        orders_response = client.get_option_orders(account_id=account_hash, status=status, max_results=50)
+        if orders_response.get('success'):
+            all_working_orders.extend(orders_response.get('data', []))
+        else:
+            print(f"\nWarning: Could not retrieve orders with status '{status}'.")
+
+    if not all_working_orders:
+        print("No working orders found.")
         return None
-
-    existing_orders = orders_response.get('data', [])
-    working_statuses = ['WORKING', 'QUEUED', 'ACCEPTED', 'PENDING_ACTIVATION']
 
     # The option_type from user input is 'C' or 'P'. Convert to full name for comparison.
     option_type_full = "CALL" if option_type.upper() == 'C' else "PUT"
 
-    for order in existing_orders:
-        if order.get('status') in working_statuses:
-            for leg in order.get('orderLegCollection', []):
-                instrument = leg.get('instrument', {})
+    for order in all_working_orders:
+        for leg in order.get('orderLegCollection', []):
+            instrument = leg.get('instrument', {})
 
-                if instrument.get('assetType') == 'OPTION':
-                    # Extract details from the instrument object
-                    underlying = instrument.get('underlyingSymbol')
-                    put_call = instrument.get('putCall')
-                    description = instrument.get('description', '')
+            if instrument.get('assetType') == 'OPTION':
+                # Extract details from the instrument object
+                underlying = instrument.get('underlyingSymbol')
+                put_call = instrument.get('putCall')
+                description = instrument.get('description', '')
 
-                    # Parse description for strike and expiry
-                    # Example: "WEBULL CORP 08/15/2025 $15.5 Put"
-                    try:
-                        desc_parts = description.split(' ')
-                        desc_expiry_str = desc_parts[-3]
-                        desc_strike_str = desc_parts[-2].replace('$', '')
+                # Parse description for strike and expiry
+                # Example: "WEBULL CORP 08/15/2025 $15.5 Put"
+                try:
+                    desc_parts = description.split(' ')
+                    desc_expiry_str = desc_parts[-3]
+                    desc_strike_str = desc_parts[-2].replace('$', '')
 
-                        desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
-                        desc_strike = float(desc_strike_str)
+                    desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
+                    desc_strike = float(desc_strike_str)
 
-                        # Compare the components
-                        if (underlying == symbol.upper() and
-                            put_call == option_type_full and
-                            desc_expiry == expiry_date and
-                            abs(desc_strike - strike_price) < 0.001):
+                    # Compare the components
+                    if (underlying == symbol.upper() and
+                        put_call == option_type_full and
+                        desc_expiry == expiry_date and
+                        abs(desc_strike - strike_price) < 0.001):
 
-                            print(f"Found a matching working order: {order.get('orderId')}")
-                            return order
+                        print(f"Found a matching working order: {order.get('orderId')} with status {order.get('status')}")
+                        return order
 
-                    except (ValueError, IndexError):
-                        # Could not parse this description, skip to the next leg/order.
-                        continue
+                except (ValueError, IndexError):
+                    # Could not parse this description, skip to the next leg/order.
+                    continue
 
     print("No matching working orders found.")
     return None
