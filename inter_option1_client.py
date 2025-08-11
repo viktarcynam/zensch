@@ -317,18 +317,37 @@ def main():
                 print(f"CALL:   {call_data['bid']}/{call_data['ask']}  PUT: {put_data['bid']}/{put_data['ask']}")
 
                 # Display positions
-                positions_response = client.get_positions_by_symbol(symbol=symbol, account_hash=account_hash)
-                print(f"\nDEBUG: Client received positions response type: {type(positions_response)}")
-                print(f"DEBUG: Client received positions response data: {positions_response}\n")
-                if positions_response.get('success') and positions_response.get('data'):
-                    positions = positions_response.get('data')
-                    position_strings = []
-                    for pos in positions:
-                        qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
-                        desc = pos.get('instrument', {}).get('description', 'Unknown')
-                        position_strings.append(f"{qty} of {desc}")
-                    if position_strings:
-                        print(f"Positions: {'; '.join(position_strings)}")
+                position_strings = []
+
+                # 1. Get stock positions for the symbol (which seems to be what get_positions_by_symbol returns)
+                stock_positions_response = client.get_positions_by_symbol(symbol=symbol, account_hash=account_hash)
+                if stock_positions_response.get('success') and stock_positions_response.get('data'):
+                    stock_data = stock_positions_response.get('data')
+                    if isinstance(stock_data, dict): # Handle the specific dict structure for stocks
+                        accounts = stock_data.get('accounts', [])
+                        for acc in accounts:
+                            for pos in acc.get('positions', []):
+                                qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+                                desc = pos.get('instrument', {}).get('description')
+                                if not desc: # Fallback for some equities
+                                    desc = pos.get('instrument', {}).get('symbol')
+                                position_strings.append(f"{qty} of {desc}")
+
+                # 2. Get all positions and filter for options for the symbol
+                all_positions_response = client.get_positions(account_hash=account_hash)
+                if all_positions_response.get('success') and all_positions_response.get('data'):
+                    all_positions = all_positions_response.get('data')
+                    for pos in all_positions:
+                        instrument = pos.get('instrument', {})
+                        if instrument.get('assetType') == 'OPTION' and instrument.get('underlyingSymbol') == symbol.upper():
+                            qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+                            desc = instrument.get('description', 'Unknown')
+                            position_strings.append(f"{qty} of {desc}")
+
+                if position_strings:
+                    # Remove duplicates that might arise from the two calls
+                    unique_positions = sorted(list(set(position_strings)))
+                    print(f"Positions: {'; '.join(unique_positions)}")
                 else:
                     print("No positions for this symbol in this account.")
 

@@ -322,8 +322,6 @@ class SchwabServer:
                     }
                 
                 result = self.positions_service.get_positions_by_symbol(symbol, account_hash)
-                logger.info(f"DEBUG: Server sending positions response type: {type(result)}")
-                logger.info(f"DEBUG: Server sending positions response data: {result}")
                 result['timestamp'] = timestamp
                 return result
             
