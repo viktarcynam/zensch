@@ -52,7 +52,7 @@ def find_replacement_order(client, account_hash, original_order):
     original_order_id = original_order['orderId']
     print(f"\nSearching for replacement of order {original_order_id}...")
 
-    working_statuses_to_check = ['WORKING', 'PENDING_ACTIVATION']
+    working_statuses_to_check = ['WORKING', 'PENDING_ACTIVATION', 'ACCEPTED', 'QUEUED']
     all_working_orders = []
 
     for status in working_statuses_to_check:
