@@ -165,6 +165,73 @@ def find_replacement_order(client, account_hash, original_order):
     print("No replacement order found after multiple attempts.")
     return None
 
+def display_symbol_positions(client, account_hash, symbol, filled_instrument_details):
+    """
+    Fetches, sorts, and displays all option positions for a given underlying symbol.
+    """
+    print(f"\nCurrent Position: {symbol.upper()}")
+    time.sleep(1) # Delay for backend update
+
+    all_positions_response = client.get_positions(account_hash=account_hash)
+    if not (all_positions_response.get('success') and all_positions_response.get('data')):
+        print("Could not retrieve positions.")
+        return
+
+    all_option_positions = []
+    accounts = all_positions_response.get('data', {}).get('accounts', [])
+    for acc in accounts:
+        for pos in acc.get('positions', []):
+            # We only care about options for the relevant symbol
+            if pos.get('instrument', {}).get('underlyingSymbol') == symbol.upper():
+                pos_details = parse_option_position_details(pos)
+                if pos_details:
+                    all_option_positions.append(pos_details)
+
+    if not all_option_positions:
+        print("No option positions found for this symbol.")
+        return
+
+    # Separate the just-filled instrument from the rest
+    just_filled_position = None
+    other_positions = []
+
+    for pos in all_option_positions:
+        is_match = (pos['put_call'] == filled_instrument_details['putCall'] and
+                    abs(pos['strike'] - filled_instrument_details['strike']) < 0.001 and
+                    pos['expiry'] == filled_instrument_details['expiry'])
+        if is_match:
+            just_filled_position = pos
+        else:
+            other_positions.append(pos)
+
+    # Sort the other positions
+    other_positions.sort(key=lambda p: (p['expiry'], p['strike']))
+
+    # Function to format a single position line
+    def format_pos_line(p):
+        qty = p['quantity']
+        if qty == 0: return None # Don't print flat positions
+
+        long_short = "long" if qty > 0 else "short"
+        abs_qty = abs(int(qty))
+        return (f"{long_short} {abs_qty} {p['put_call']} "
+                f"Strike:{format_price(p['strike'])} Expiry:{p['expiry']}")
+
+    # Print the just-filled position first, if it exists and is not flat
+    if just_filled_position:
+        line = format_pos_line(just_filled_position)
+        if line:
+            print(line)
+    else:
+         print(f"Warning: Could not find the specific position for the just-filled order.")
+
+
+    # Print the rest of the sorted positions
+    for pos in other_positions:
+        line = format_pos_line(pos)
+        if line:
+            print(line)
+
 def poll_order_status(client, account_hash, order_to_monitor):
     """
     Poll the status of an order until it is filled, canceled, or replaced.
@@ -423,6 +490,11 @@ def poll_order_status(client, account_hash, order_to_monitor):
                 except Exception as e:
                     print(f"DEBUG: An error occurred during debug file generation: {e}")
                 # --- END DEBUG CODE ---
+
+                # --- BEGIN POSITION DISPLAY ---
+                display_symbol_positions(client, account_hash, order_to_monitor['symbol'], order_to_monitor)
+                # --- END POSITION DISPLAY ---
+
                 return order_details, "FILLED"
             elif status == 'REPLACED':
                 print(f"\nOrder {current_order_id} has been replaced.")
