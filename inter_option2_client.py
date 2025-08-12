@@ -44,11 +44,12 @@ def get_next_friday():
     next_friday = today + timedelta(days=days_until_friday)
     return next_friday.strftime('%Y-%m-%d')
 
-def find_replacement_order(client, account_hash, original_order_id, instrument_details):
+def find_replacement_order(client, account_hash, original_order):
     """
     Find the new order that replaced an old one.
-    It looks for a working order with the same instrument details but a different order ID.
+    It looks for a working order with the same instrument details and instruction.
     """
+    original_order_id = original_order['orderId']
     print(f"\nSearching for replacement of order {original_order_id}...")
 
     working_statuses_to_check = ['WORKING', 'PENDING_ACTIVATION']
@@ -65,12 +66,6 @@ def find_replacement_order(client, account_hash, original_order_id, instrument_d
         print("No working orders found to search for replacement.")
         return None
 
-    # Details from the original instrument
-    symbol = instrument_details['symbol']
-    option_type_full = instrument_details['put_call']
-    strike_price = instrument_details['strike']
-    expiry_date = instrument_details['expiry']
-
     for order in all_working_orders:
         if str(order.get('orderId')) == str(original_order_id):
             continue # Skip the original order
@@ -83,75 +78,55 @@ def find_replacement_order(client, account_hash, original_order_id, instrument_d
                     if candidate_strike is None:
                         continue
 
-                    # Direct comparison using structured data first
-                    if (instrument.get('underlyingSymbol') == symbol and
-                        instrument.get('putCall') == option_type_full and
-                        abs(candidate_strike - strike_price) < 0.001):
+                    # Compare all key details. Price is expected to be different.
+                    if (instrument.get('underlyingSymbol') == original_order['symbol'] and
+                        instrument.get('putCall') == original_order['putCall'] and
+                        leg.get('instruction') == original_order['instruction'] and
+                        abs(candidate_strike - original_order['strike']) < 0.001):
 
-                        # Description parsing for expiry is still needed as a fallback/check
+                        # Final check on expiry date from description
                         desc_expiry = None
                         desc_parts = instrument.get('description', '').split(' ')
                         if len(desc_parts) > 2:
                             desc_expiry_str = desc_parts[-3]
                             desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
 
-                        if desc_expiry and desc_expiry == expiry_date:
+                        if desc_expiry and desc_expiry == original_order['expiry']:
                              print(f"Found replacement order: {order.get('orderId')} with status {order.get('status')}")
                              return order
 
-                except (ValueError, IndexError, KeyError):
+                except (ValueError, IndexError, KeyError) as e:
+                    print(f"\nError comparing order details: {e}")
                     continue
 
     print("No replacement order found.")
     return None
 
-def poll_order_status(client, account_hash, order_id):
-    """Poll the status of an order until it is filled, canceled, or replaced."""
+def poll_order_status(client, account_hash, order_to_monitor):
+    """
+    Poll the status of an order until it is filled, canceled, or replaced.
+    Relies on a passed-in dictionary of order details.
+    """
     print("\nMonitoring order status...", end="", flush=True)
 
-    # Get initial order details to extract instrument info for periodic updates
-    initial_details_response = client.get_option_order_details(account_id=account_hash, order_id=order_id)
-    if not initial_details_response.get('success'):
-        print(f"\nError getting initial order details: {initial_details_response.get('error')}")
-        return None, "ERROR"
+    current_order_id = order_to_monitor['orderId']
 
-    initial_order_details = initial_details_response.get('data', {})
-
-    # Prepare details for periodic updates
-    order_summary, instrument_details = None, None
-    try:
-        leg = initial_order_details.get('orderLegCollection', [{}])[0]
-        instrument = leg.get('instrument', {})
-        symbol = instrument.get('underlyingSymbol')
-        put_call = instrument.get('putCall')
-        strike_price = instrument.get('strikePrice')
-        desc_parts = instrument.get('description', '').split(' ')
-        expiry_str = desc_parts[-3]
-        expiry_date = datetime.strptime(expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
-
-        instrument_details = {
-            "symbol": symbol, "put_call": put_call, "strike": strike_price, "expiry": expiry_date
-        }
-
-        order_summary = (f"{leg.get('instruction', '').replace('_', ' ')} {int(leg.get('quantity', 0))} "
-                         f"{put_call.lower()} strike {format_price(strike_price)} "
-                         f"with limit price {format_price(initial_order_details.get('price'))}")
-    except (ValueError, IndexError, KeyError) as e:
-        print(f"\nWarning: Could not parse all order details for periodic updates: {e}")
-        order_summary = f"Order ID {order_id}"
+    # Prepare details for periodic updates from the passed-in object
+    order_summary = (f"{order_to_monitor['instruction'].replace('_', ' ')} {int(order_to_monitor['quantity'])} "
+                     f"{order_to_monitor['putCall'].lower()} strike {format_price(order_to_monitor['strike'])} "
+                     f"with limit price {format_price(order_to_monitor['price'])}")
 
     poll_count = 0
     while True:
-        # The first output will be a dot, subsequent ones will be on new lines if needed
         if poll_count > 0:
              print(".", end="", flush=True)
         time.sleep(4)
         poll_count += 1
 
-        order_details_response = client.get_option_order_details(account_id=account_hash, order_id=order_id)
+        order_details_response = client.get_option_order_details(account_id=account_hash, order_id=current_order_id)
 
         if not order_details_response.get('success'):
-            print(f"\nError getting order details: {order_details_response.get('error')}")
+            print(f"\nError getting order details for order {current_order_id}: {order_details_response.get('error')}")
             return None, "ERROR"
 
         order_details = order_details_response.get('data', {})
@@ -161,29 +136,33 @@ def poll_order_status(client, account_hash, order_id):
             print("\nOrder filled!")
             return order_details, "FILLED"
         elif status == 'REPLACED':
-            print(f"\nOrder {order_id} has been replaced.")
-            if not instrument_details or instrument_details.get('strike') is None:
-                print("\nCannot find replacement: original order details are missing a strike price. Restarting flow.")
-                return None, "REPLACEMENT_NOT_FOUND"
+            print(f"\nOrder {current_order_id} has been replaced.")
 
-            replacement_order = find_replacement_order(client, account_hash, order_id, instrument_details)
+            replacement_order = find_replacement_order(client, account_hash, order_to_monitor)
             if replacement_order:
                 new_order_id = replacement_order.get('orderId')
                 print(f"Now monitoring new order {new_order_id}.")
-                order_id = new_order_id
-                poll_count = 0 # Reset poll count for the new order
 
-                # Update order summary for periodic updates
+                # Update the details for the new order
+                current_order_id = new_order_id
+                order_to_monitor['orderId'] = new_order_id
                 try:
-                    leg = replacement_order.get('orderLegCollection', [{}])[0]
-                    instrument = leg.get('instrument', {})
-                    order_summary = (f"{leg.get('instruction', '').replace('_', ' ')} {int(leg.get('quantity', 0))} "
-                                     f"{instrument.get('putCall').lower()} strike {format_price(instrument.get('strikePrice'))} "
-                                     f"with limit price {format_price(replacement_order.get('price'))}")
+                    # Update price and potentially other fields from the replacement order
+                    new_leg = replacement_order.get('orderLegCollection', [{}])[0]
+                    order_to_monitor['price'] = replacement_order.get('price')
+                    order_to_monitor['instruction'] = new_leg.get('instruction')
+                    order_to_monitor['quantity'] = new_leg.get('quantity')
+
+                    # Recreate summary for the new order
+                    order_summary = (f"{order_to_monitor['instruction'].replace('_', ' ')} {int(order_to_monitor['quantity'])} "
+                                     f"{order_to_monitor['putCall'].lower()} strike {format_price(order_to_monitor['strike'])} "
+                                     f"with limit price {format_price(order_to_monitor['price'])}")
+
                 except Exception as e:
-                    print(f"\nWarning: Could not parse new order details for periodic updates: {e}")
+                    print(f"\nWarning: Could not parse all new order details for periodic updates: {e}")
                     order_summary = f"Order ID {new_order_id}"
 
+                poll_count = 0 # Reset poll count for the new order
                 continue # Continue the loop to poll the new order immediately
             else:
                 print("Could not find replacement order. Restarting flow.")
@@ -192,40 +171,35 @@ def poll_order_status(client, account_hash, order_id):
             print(f"\nOrder not filled. Status: {status}")
             return order_details, status
 
-        if poll_count % 4 == 0 and instrument_details and instrument_details.get('strike') is not None:
+        if poll_count % 4 == 0:
             try:
                 option_chain_response = client.get_option_chains(
-                    symbol=instrument_details['symbol'],
-                    strike=instrument_details['strike'],
-                    fromDate=instrument_details['expiry'],
-                    toDate=instrument_details['expiry'],
+                    symbol=order_to_monitor['symbol'],
+                    strike=order_to_monitor['strike'],
+                    fromDate=order_to_monitor['expiry'],
+                    toDate=order_to_monitor['expiry'],
                     contractType='ALL'
                 )
 
                 if option_chain_response.get('success') and option_chain_response.get('data'):
                     oc_data = option_chain_response['data']
-
-                    # Get both call and put data using robust lookup
                     call_map = oc_data.get('callExpDateMap', {})
                     put_map = oc_data.get('putExpDateMap', {})
-
                     call_data, put_data = None, None
 
-                    # Find call data
-                    date_key_call = next((k for k in call_map if k.startswith(instrument_details['expiry'])), None)
+                    date_key_call = next((k for k in call_map if k.startswith(order_to_monitor['expiry'])), None)
                     if date_key_call:
                         strike_map_call = call_map.get(date_key_call, {})
                         for key_str, option_list in strike_map_call.items():
-                            if abs(float(key_str) - instrument_details['strike']) < 0.001:
+                            if abs(float(key_str) - order_to_monitor['strike']) < 0.001:
                                 call_data = option_list[0] if option_list else None
                                 break
 
-                    # Find put data
-                    date_key_put = next((k for k in put_map if k.startswith(instrument_details['expiry'])), None)
+                    date_key_put = next((k for k in put_map if k.startswith(order_to_monitor['expiry'])), None)
                     if date_key_put:
                         strike_map_put = put_map.get(date_key_put, {})
                         for key_str, option_list in strike_map_put.items():
-                            if abs(float(key_str) - instrument_details['strike']) < 0.001:
+                            if abs(float(key_str) - order_to_monitor['strike']) < 0.001:
                                 put_data = option_list[0] if option_list else None
                                 break
 
@@ -235,7 +209,7 @@ def poll_order_status(client, account_hash, order_id):
                               f"PUT: {format_price(put_data['bid'])}/{format_price(put_data['ask'])} | "
                               f"Monitoring: {order_summary}")
                     else:
-                        print(f"\nCould not find option data for periodic update.")
+                        print(f"\nCould not find option data for periodic update for strike {order_to_monitor['strike']}.")
                 else:
                     print(f"\nCould not fetch option chain for periodic update.")
             except Exception as e:
@@ -330,9 +304,19 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
         order_id = order_data.get('order_id')
 
         if order_id:
-            # The poll_order_status function now handles replaced orders internally.
-            # We just need to handle the final status.
-            filled_order, status = poll_order_status(client, account_hash, order_id)
+            # Construct the dictionary of details for the order to be monitored
+            order_to_monitor = {
+                "orderId": order_id,
+                "instruction": side,
+                "quantity": quantity,
+                "symbol": symbol,
+                "putCall": "CALL" if option_type_in == 'C' else "PUT",
+                "strike": strike_price,
+                "expiry": expiry_date,
+                "price": price
+            }
+
+            filled_order, status = poll_order_status(client, account_hash, order_to_monitor)
 
             if status == "REPLACEMENT_NOT_FOUND":
                 print("Aborting current workflow.")
@@ -403,7 +387,17 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
                     closing_order_id = closing_order_data.get('order_id')
 
                     if closing_order_id:
-                        filled_closing_order, closing_status = poll_order_status(client, account_hash, closing_order_id)
+                        closing_order_to_monitor = {
+                            "orderId": closing_order_id,
+                            "instruction": closing_side,
+                            "quantity": quantity,
+                            "symbol": symbol,
+                            "putCall": "CALL" if option_type_in == 'C' else "PUT",
+                            "strike": strike_price,
+                            "expiry": expiry_date,
+                            "price": closing_price
+                        }
+                        filled_closing_order, closing_status = poll_order_status(client, account_hash, closing_order_to_monitor)
 
                         if closing_status == "REPLACEMENT_NOT_FOUND":
                             print("Aborting current workflow.")
