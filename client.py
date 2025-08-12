@@ -13,6 +13,16 @@ from json_parser import json_parser
 
 logger = logging.getLogger(__name__)
 
+def _recv_all(sock: socket.socket, n: int) -> Optional[bytearray]:
+    """Helper function to receive n bytes from a socket."""
+    data = bytearray()
+    while len(data) < n:
+        packet = sock.recv(n - len(data))
+        if not packet:
+            return None
+        data.extend(packet)
+    return data
+
 class SchwabClient:
     """TCP Client for communicating with Schwab API server."""
     
@@ -131,10 +141,21 @@ class SchwabClient:
             
             # Send request
             request_json = json.dumps(request)
-            self.socket.send(request_json.encode('utf-8'))
+            self.socket.sendall(request_json.encode('utf-8'))
+
+            # Receive response using the new message framing protocol
+            # 1. Read the 4-byte header to get the message length
+            header_data = _recv_all(self.socket, 4)
+            if not header_data:
+                raise ConnectionError("Connection closed by server (failed to receive header)")
             
-            # Receive response
-            response_data = self.socket.recv(131072)  # Increased buffer size for larger responses
+            msg_len = int.from_bytes(header_data, 'big')
+
+            # 2. Read the full message body of msg_len bytes
+            response_data = _recv_all(self.socket, msg_len)
+            if not response_data:
+                raise ConnectionError("Connection closed by server (failed to receive message body)")
+
             response = json.loads(response_data.decode('utf-8'))
             
             return response
