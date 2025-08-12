@@ -16,6 +16,30 @@ def format_price(price):
         return "N/A"
     return f"{price:.2f}"
 
+def parse_option_symbol(symbol_string):
+    """
+    Parses a standard OCC option symbol string.
+    Example: 'HOG   250815C00024000'
+    Returns: A dictionary with 'underlying', 'expiry_date', 'put_call', 'strike'.
+    """
+    try:
+        underlying = symbol_string[0:6].strip()
+        date_str = symbol_string[6:12]
+        expiry_date = datetime.strptime(date_str, '%y%m%d').strftime('%Y-%m-%d')
+        put_call = "CALL" if symbol_string[12] == 'C' else "PUT"
+        strike_int = int(symbol_string[13:])
+        strike = float(strike_int) / 1000.0
+
+        return {
+            "underlying": underlying,
+            "expiry_date": expiry_date,
+            "put_call": put_call,
+            "strike": strike
+        }
+    except (ValueError, IndexError) as e:
+        print(f"\nError parsing OCC symbol '{symbol_string}': {e}")
+        return None
+
 def get_account_hash(client):
     """Get the first account hash."""
     accounts = client.get_linked_accounts()
@@ -68,53 +92,25 @@ def find_replacement_order(client, account_hash, original_order):
 
     for order in all_working_orders:
         if str(order.get('orderId')) == str(original_order_id):
-            continue # Skip the original order
+            continue
 
         for leg in order.get('orderLegCollection', []):
             instrument = leg.get('instrument', {})
             if instrument.get('assetType') == 'OPTION':
-                try:
-                    candidate_strike = instrument.get('strikePrice')
-                    if candidate_strike is None:
-                        continue
 
-                    # --- Start Debug Prints ---
-                    print("\n--- COMPARING ORDERS ---")
-                    print(f"  ORIGINAL -> Symbol: {original_order['symbol']}, Type: {original_order['putCall']}, Strike: {original_order['strike']}, Expiry: {original_order['expiry']}, Instruction: {original_order['instruction']}")
-
-                    desc_expiry = None
-                    try:
-                        desc_parts = instrument.get('description', '').split(' ')
-                        if len(desc_parts) > 2:
-                            desc_expiry_str = desc_parts[-3]
-                            desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
-                    except Exception as e:
-                        desc_expiry = f"PARSE_ERROR: {e}"
-
-                    print(f"  CANDIDATE -> Symbol: {instrument.get('underlyingSymbol')}, Type: {instrument.get('putCall')}, Strike: {candidate_strike}, Expiry: {desc_expiry}, Instruction: {leg.get('instruction')}")
-                    print("----------------------")
-                    # --- End Debug Prints ---
-
-                    # Compare all key details. Price is expected to be different.
-                    if (instrument.get('underlyingSymbol') == original_order['symbol'] and
-                        instrument.get('putCall') == original_order['putCall'] and
-                        leg.get('instruction') == original_order['instruction'] and
-                        abs(candidate_strike - original_order['strike']) < 0.001):
-
-                        # Final check on expiry date from description
-                        desc_expiry = None
-                        desc_parts = instrument.get('description', '').split(' ')
-                        if len(desc_parts) > 2:
-                            desc_expiry_str = desc_parts[-3]
-                            desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
-
-                        if desc_expiry and desc_expiry == original_order['expiry']:
-                             print(f"Found replacement order: {order.get('orderId')} with status {order.get('status')}")
-                             return order
-
-                except (ValueError, IndexError, KeyError) as e:
-                    print(f"\nError comparing order details: {e}")
+                candidate_details = parse_option_symbol(instrument.get('symbol'))
+                if not candidate_details:
                     continue
+
+                # Compare all key details. Price is expected to be different.
+                if (candidate_details['underlying'] == original_order['symbol'] and
+                    candidate_details['put_call'] == original_order['putCall'] and
+                    leg.get('instruction') == original_order['instruction'] and
+                    abs(candidate_details['strike'] - original_order['strike']) < 0.001 and
+                    candidate_details['expiry_date'] == original_order['expiry']):
+
+                    print(f"Found replacement order: {order.get('orderId')} with status {order.get('status')}")
+                    return order
 
     print("No replacement order found.")
     return None
@@ -128,7 +124,6 @@ def poll_order_status(client, account_hash, order_to_monitor):
 
     current_order_id = order_to_monitor['orderId']
 
-    # Prepare details for periodic updates from the passed-in object
     order_summary = (f"{order_to_monitor['instruction'].replace('_', ' ')} {int(order_to_monitor['quantity'])} "
                      f"{order_to_monitor['putCall'].lower()} strike {format_price(order_to_monitor['strike'])} "
                      f"with limit price {format_price(order_to_monitor['price'])}")
@@ -160,49 +155,25 @@ def poll_order_status(client, account_hash, order_to_monitor):
                 new_order_id = replacement_order.get('orderId')
                 print(f"Now monitoring new order {new_order_id}.")
 
-                # Update the details for the new order
                 current_order_id = new_order_id
                 order_to_monitor['orderId'] = new_order_id
                 try:
-                    # Update price and potentially other fields from the replacement order
                     new_leg = replacement_order.get('orderLegCollection', [{}])[0]
                     order_to_monitor['price'] = replacement_order.get('price')
                     order_to_monitor['instruction'] = new_leg.get('instruction')
                     order_to_monitor['quantity'] = new_leg.get('quantity')
 
-                    # Recreate summary for the new order
                     order_summary = (f"{order_to_monitor['instruction'].replace('_', ' ')} {int(order_to_monitor['quantity'])} "
                                      f"{order_to_monitor['putCall'].lower()} strike {format_price(order_to_monitor['strike'])} "
                                      f"with limit price {format_price(order_to_monitor['price'])}")
-
                 except Exception as e:
                     print(f"\nWarning: Could not parse all new order details for periodic updates: {e}")
                     order_summary = f"Order ID {new_order_id}"
 
-                poll_count = 0 # Reset poll count for the new order
-                continue # Continue the loop to poll the new order immediately
+                poll_count = 0
+                continue
             else:
-                print("Could not find replacement order with the expected statuses. Dumping all recent orders for debugging...")
-                try:
-                    from_time = datetime.now() - timedelta(hours=1)
-                    to_time = datetime.now()
-
-                    all_orders_response = client.get_option_orders(
-                        account_id=account_hash,
-                        from_entered_time=from_time.isoformat(),
-                        to_entered_time=to_time.isoformat()
-                    )
-
-                    if all_orders_response.get('success'):
-                        with open("debug_all_orders.json", "w") as f:
-                            json.dump(all_orders_response.get('data', []), f, indent=2)
-                        print("Wrote all orders from the last hour to debug_all_orders.json")
-                    else:
-                        print(f"Failed to retrieve all recent orders for debugging: {all_orders_response.get('error')}")
-                except Exception as e:
-                    print(f"An error occurred during fallback debug logging: {e}")
-
-                print("Restarting flow.")
+                print("Could not find replacement order. Restarting flow.")
                 return None, "REPLACEMENT_NOT_FOUND"
         elif status in ['CANCELED', 'EXPIRED', 'REJECTED']:
             print(f"\nOrder not filled. Status: {status}")
@@ -374,19 +345,23 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
                     closing_option_data = closing_option_chain_response['data']
                     closing_call_map = closing_option_data.get('callExpDateMap', {})
                     closing_put_map = closing_option_data.get('putExpDateMap', {})
+                    closing_call_data, closing_put_data = None, None
 
-                    closing_call_data = None
-                    closing_put_data = None
+                    date_key_call = next((k for k in closing_call_map if k.startswith(expiry_date)), None)
+                    if date_key_call:
+                        strike_map_call = closing_call_map.get(date_key_call, {})
+                        for key_str, option_list in strike_map_call.items():
+                            if abs(float(key_str) - strike_price) < 0.001:
+                                closing_call_data = option_list[0] if option_list else None
+                                break
 
-                    closing_date_key = next((key for key in closing_call_map if key.startswith(expiry_date)), None)
-                    if closing_date_key:
-                        closing_strike_map_call = closing_call_map.get(closing_date_key, {})
-                        closing_call_data = closing_strike_map_call.get(str(float(strike_price)), [None])[0]
-
-                    closing_date_key_put = next((key for key in closing_put_map if key.startswith(expiry_date)), None)
-                    if closing_date_key_put:
-                        closing_strike_map_put = closing_put_map.get(closing_date_key_put, {})
-                        closing_put_data = closing_strike_map_put.get(str(float(strike_price)), [None])[0]
+                    date_key_put = next((k for k in closing_put_map if k.startswith(expiry_date)), None)
+                    if date_key_put:
+                        strike_map_put = closing_put_map.get(date_key_put, {})
+                        for key_str, option_list in strike_map_put.items():
+                            if abs(float(key_str) - strike_price) < 0.001:
+                                closing_put_data = option_list[0] if option_list else None
+                                break
 
                     if closing_call_data and closing_put_data:
                         print(f"Current prices: CALL: {format_price(closing_call_data['bid'])}/{format_price(closing_call_data['ask'])}  PUT: {format_price(closing_put_data['bid'])}/{format_price(closing_put_data['ask'])}")
@@ -441,8 +416,7 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
                             return
 
                         if closing_status == "FILLED":
-                            # Display summary
-                            entry_.get('orderLegCollection', [{}])[0].get('price')
+                            entry_price = filled_order.get('orderLegCollection', [{}])[0].get('price')
                             exit_price = filled_closing_order.get('orderLegCollection', [{}])[0].get('price')
 
                             print("\n--- Trade Summary ---")
@@ -563,29 +537,15 @@ def main():
                 put_data = None
 
                 # Find the correct date key
-                date_key_call = next((key for key in call_map if key.startswith(expiry_date)), None)
-                if date_key_call:
-                    strike_map_call = call_map.get(date_key_call, {})
-                    # Robust strike lookup
-                    for key_str, option_list in strike_map_call.items():
-                        try:
-                            if abs(float(key_str) - strike_price) < 0.001:
-                                call_data = option_list[0] if option_list else None
-                                break
-                        except (ValueError, IndexError):
-                            continue
+                date_key = next((key for key in call_map if key.startswith(expiry_date)), None)
+                if date_key:
+                    strike_map_call = call_map.get(date_key, {})
+                    call_data = strike_map_call.get(str(float(strike_price)), [None])[0]
 
                 date_key_put = next((key for key in put_map if key.startswith(expiry_date)), None)
                 if date_key_put:
                     strike_map_put = put_map.get(date_key_put, {})
-                    # Robust strike lookup
-                    for key_str, option_list in strike_map_put.items():
-                        try:
-                            if abs(float(key_str) - strike_price) < 0.001:
-                                put_data = option_list[0] if option_list else None
-                                break
-                        except (ValueError, IndexError):
-                            continue
+                    put_data = strike_map_put.get(str(float(strike_price)), [None])[0]
 
                 if not call_data or not put_data:
                     print("Could not find option data for the specified strike and date.")
