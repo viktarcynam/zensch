@@ -107,47 +107,62 @@ def find_replacement_order(client, account_hash, original_order):
     """
     Find the new order that replaced an old one.
     It looks for a working order with the same instrument details and instruction.
+    Includes a retry mechanism to handle backend processing delays.
     """
     original_order_id = original_order['orderId']
     print(f"\nSearching for replacement of order {original_order_id}...")
 
-    working_statuses_to_check = ['WORKING', 'PENDING_ACTIVATION', 'ACCEPTED', 'QUEUED']
-    all_working_orders = []
+    max_retries = 3
+    retry_delay = 2 # seconds
 
-    for status in working_statuses_to_check:
-        orders_response = client.get_option_orders(account_id=account_hash, status=status, max_results=50)
-        if orders_response.get('success'):
-            all_working_orders.extend(orders_response.get('data', []))
-        else:
-            print(f"\nWarning: Could not retrieve orders with status '{status}'.")
+    for attempt in range(max_retries):
+        if attempt > 0:
+            print(f"Retrying search... (Attempt {attempt + 1}/{max_retries})")
+            time.sleep(retry_delay)
 
-    if not all_working_orders:
-        print("No working orders found to search for replacement.")
-        return None
+        working_statuses_to_check = ['WORKING', 'PENDING_ACTIVATION', 'ACCEPTED', 'QUEUED']
+        all_working_orders = []
 
-    for order in all_working_orders:
-        if str(order.get('orderId')) == str(original_order_id):
-            continue
+        for status in working_statuses_to_check:
+            orders_response = client.get_option_orders(account_id=account_hash, status=status, max_results=50)
+            if orders_response.get('success'):
+                all_working_orders.extend(orders_response.get('data', []))
+            else:
+                print(f"\nWarning: Could not retrieve orders with status '{status}'.")
 
-        for leg in order.get('orderLegCollection', []):
-            instrument = leg.get('instrument', {})
-            if instrument.get('assetType') == 'OPTION':
+        if not all_working_orders:
+            if attempt < max_retries - 1:
+                continue # Go to next retry attempt
+            else:
+                print("No working orders found to search for replacement after multiple attempts.")
+                return None
 
-                candidate_details = parse_option_symbol(instrument.get('symbol'))
-                if not candidate_details:
-                    continue
+        # Search for the matching order in the retrieved list
+        for order in all_working_orders:
+            if str(order.get('orderId')) == str(original_order_id):
+                continue
 
-                # Compare all key details. Price is expected to be different.
-                if (candidate_details['underlying'] == original_order['symbol'] and
-                    candidate_details['put_call'] == original_order['putCall'] and
-                    leg.get('instruction') == original_order['instruction'] and
-                    abs(candidate_details['strike'] - original_order['strike']) < 0.001 and
-                    candidate_details['expiry_date'] == original_order['expiry']):
+            for leg in order.get('orderLegCollection', []):
+                instrument = leg.get('instrument', {})
+                if instrument.get('assetType') == 'OPTION':
 
-                    print(f"Found replacement order: {order.get('orderId')} with status {order.get('status')}")
-                    return order
+                    candidate_details = parse_option_symbol(instrument.get('symbol'))
+                    if not candidate_details:
+                        continue
 
-    print("No replacement order found.")
+                    # Compare all key details. Price is expected to be different.
+                    if (candidate_details['underlying'] == original_order['symbol'] and
+                        candidate_details['put_call'] == original_order['putCall'] and
+                        leg.get('instruction') == original_order['instruction'] and
+                        abs(candidate_details['strike'] - original_order['strike']) < 0.001 and
+                        candidate_details['expiry_date'] == original_order['expiry']):
+
+                        print(f"Found replacement order: {order.get('orderId')} with status {order.get('status')}")
+                        return order
+
+        # If no match was found in this attempt's list of orders, the loop will either retry or exit.
+
+    print("No replacement order found after multiple attempts.")
     return None
 
 def poll_order_status(client, account_hash, order_to_monitor):
