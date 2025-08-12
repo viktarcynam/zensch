@@ -440,9 +440,12 @@ def main():
 
         while True:
             try:
-                symbol = input("\nEnter a stock symbol (or 'quit' to exit): ").upper()
-                if symbol == 'QUIT':
+
+                symbol_input = input("\nEnter a stock symbol (or 'q' to quit): ").upper()
+                if symbol_input in ['QUIT', 'Q']:
                     break
+                symbol = symbol_input
+
 
                 # Get last price
                 quotes_response = client.get_quotes(symbols=[symbol])
@@ -606,8 +609,10 @@ def main():
                 existing_order = check_for_existing_order(client, account_hash, symbol, option_type_in, strike_price, expiry_date)
 
                 if existing_order:
-                    cancel_and_replace = input("Cancel existing order and place new one? (yes/no): ").lower()
-                    if cancel_and_replace == 'yes':
+
+                    cancel_and_replace = input("Cancel existing order and place new one? (y/n): ").lower()
+                    if cancel_and_replace in ['y', 'yes']:
+
                         existing_order_id = existing_order.get('orderId')
                         print(f"Replacing order {existing_order_id}...")
 
