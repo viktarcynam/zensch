@@ -188,7 +188,7 @@ def poll_order_status(client, account_hash, order_id):
             print(f"\nOrder not filled. Status: {status}")
             return order_details, status
 
-        if poll_count % 4 == 0 and instrument_details:
+        if poll_count % 4 == 0 and instrument_details and instrument_details.get('strike') is not None:
             try:
                 option_chain_response = client.get_option_chains(
                     symbol=instrument_details['symbol'],
@@ -200,17 +200,38 @@ def poll_order_status(client, account_hash, order_id):
 
                 if option_chain_response.get('success') and option_chain_response.get('data'):
                     oc_data = option_chain_response['data']
-                    map_key = 'callExpDateMap' if instrument_details['put_call'] == "CALL" else 'putExpDateMap'
-                    date_key = next((k for k in oc_data.get(map_key, {}) if k.startswith(instrument_details['expiry'])), None)
-                    if date_key:
-                        strike_map = oc_data[map_key].get(date_key, {})
-                        option_data = strike_map.get(str(float(instrument_details['strike'])), [None])[0]
-                        if option_data:
-                            print(f"\n[{datetime.now().strftime('%H:%M:%S')}] {option_data['symbol']} "
-                                  f"BID: {format_price(option_data['bid'])} ASK: {format_price(option_data['ask'])} | "
-                                  f"Monitoring: {order_summary}")
-                        else:
-                            print(f"\nCould not find option data for periodic update.")
+
+                    # Get both call and put data using robust lookup
+                    call_map = oc_data.get('callExpDateMap', {})
+                    put_map = oc_data.get('putExpDateMap', {})
+
+                    call_data, put_data = None, None
+
+                    # Find call data
+                    date_key_call = next((k for k in call_map if k.startswith(instrument_details['expiry'])), None)
+                    if date_key_call:
+                        strike_map_call = call_map.get(date_key_call, {})
+                        for key_str, option_list in strike_map_call.items():
+                            if abs(float(key_str) - instrument_details['strike']) < 0.001:
+                                call_data = option_list[0] if option_list else None
+                                break
+
+                    # Find put data
+                    date_key_put = next((k for k in put_map if k.startswith(instrument_details['expiry'])), None)
+                    if date_key_put:
+                        strike_map_put = put_map.get(date_key_put, {})
+                        for key_str, option_list in strike_map_put.items():
+                            if abs(float(key_str) - instrument_details['strike']) < 0.001:
+                                put_data = option_list[0] if option_list else None
+                                break
+
+                    if call_data and put_data:
+                        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] "
+                              f"CALL: {format_price(call_data['bid'])}/{format_price(call_data['ask'])} | "
+                              f"PUT: {format_price(put_data['bid'])}/{format_price(put_data['ask'])} | "
+                              f"Monitoring: {order_summary}")
+                    else:
+                        print(f"\nCould not find option data for periodic update.")
                 else:
                     print(f"\nCould not fetch option chain for periodic update.")
             except Exception as e:
