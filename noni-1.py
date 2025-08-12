@@ -392,44 +392,44 @@ def poll_order_status(client, account_hash, order_to_monitor):
                     poll_count = 0
                     continue
                 else:
-                print("\nCould not find a new working replacement order. Checking if the original order was filled instead...")
-                time.sleep(1) # Give a moment for the account to update
-                original_order_details_response = client.get_option_order_details(account_id=account_hash, order_id=order_to_monitor['orderId'])
+                    print("\nCould not find a new working replacement order. Checking if the original order was filled instead...")
+                    time.sleep(1) # Give a moment for the account to update
+                    original_order_details_response = client.get_option_order_details(account_id=account_hash, order_id=order_to_monitor['orderId'])
 
-                if original_order_details_response.get('success'):
-                    original_order_details = original_order_details_response.get('data', {})
-                    if original_order_details.get('status') == 'FILLED':
-                        print("Original order was filled before replacement could complete. Verifying position...")
+                    if original_order_details_response.get('success'):
+                        original_order_details = original_order_details_response.get('data', {})
+                        if original_order_details.get('status') == 'FILLED':
+                            print("Original order was filled before replacement could complete. Verifying position...")
 
-                        # Verify the position exists
-                        positions_response = client.get_positions_by_symbol(symbol=order_to_monitor['symbol'], account_hash=account_hash)
-                        position_verified = False
-                        if positions_response.get('success') and positions_response.get('data'):
-                            accounts = positions_response.get('data', {}).get('accounts', [])
-                            for acc in accounts:
-                                for pos in acc.get('positions', []):
-                                    pos_details = parse_option_position_details(pos)
-                                    if not pos_details:
-                                        continue
+                            # Verify the position exists
+                            positions_response = client.get_positions_by_symbol(symbol=order_to_monitor['symbol'], account_hash=account_hash)
+                            position_verified = False
+                            if positions_response.get('success') and positions_response.get('data'):
+                                accounts = positions_response.get('data', {}).get('accounts', [])
+                                for acc in accounts:
+                                    for pos in acc.get('positions', []):
+                                        pos_details = parse_option_position_details(pos)
+                                        if not pos_details:
+                                            continue
 
-                                    if (pos_details['put_call'] == order_to_monitor['putCall'] and
-                                        abs(pos_details['strike'] - order_to_monitor['strike']) < 0.001 and
-                                        pos_details['expiry'] == order_to_monitor['expiry'] and
-                                        pos_details['quantity'] != 0):
-                                        position_verified = True
+                                        if (pos_details['put_call'] == order_to_monitor['putCall'] and
+                                            abs(pos_details['strike'] - order_to_monitor['strike']) < 0.001 and
+                                            pos_details['expiry'] == order_to_monitor['expiry'] and
+                                            pos_details['quantity'] != 0):
+                                            position_verified = True
+                                            break
+                                    if position_verified:
                                         break
-                                if position_verified:
-                                    break
 
-                        if position_verified:
-                            print("Position verified. Proceeding with filled order workflow.")
-                            return original_order_details, "FILLED"
-                        else:
-                            print("Original order was filled, but could not verify the new position. Restarting flow for safety.")
-                            return None, "REPLACEMENT_NOT_FOUND"
+                            if position_verified:
+                                print("Position verified. Proceeding with filled order workflow.")
+                                return original_order_details, "FILLED"
+                            else:
+                                print("Original order was filled, but could not verify the new position. Restarting flow for safety.")
+                                return None, "REPLACEMENT_NOT_FOUND"
 
-                # If we're here, the original order was not filled, and we can't find the replacement.
-                print("Could not find replacement order and original was not filled. Restarting flow.")
+                    # If we're here, the original order was not filled, and we can't find the replacement.
+                    print("Could not find replacement order and original was not filled. Restarting flow.")
                     return None, "REPLACEMENT_NOT_FOUND"
             elif status in ['CANCELED', 'EXPIRED', 'REJECTED']:
                 print(f"\nOrder not filled. Status: {status}")
