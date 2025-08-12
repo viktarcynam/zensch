@@ -79,10 +79,14 @@ def find_replacement_order(client, account_hash, original_order_id, instrument_d
             instrument = leg.get('instrument', {})
             if instrument.get('assetType') == 'OPTION':
                 try:
+                    candidate_strike = instrument.get('strikePrice')
+                    if candidate_strike is None:
+                        continue
+
                     # Direct comparison using structured data first
                     if (instrument.get('underlyingSymbol') == symbol and
                         instrument.get('putCall') == option_type_full and
-                        abs(instrument.get('strikePrice') - strike_price) < 0.001):
+                        abs(candidate_strike - strike_price) < 0.001):
 
                         # Description parsing for expiry is still needed as a fallback/check
                         desc_expiry = None
@@ -158,8 +162,8 @@ def poll_order_status(client, account_hash, order_id):
             return order_details, "FILLED"
         elif status == 'REPLACED':
             print(f"\nOrder {order_id} has been replaced.")
-            if not instrument_details:
-                print("\nCannot find replacement without instrument details. Restarting flow.")
+            if not instrument_details or instrument_details.get('strike') is None:
+                print("\nCannot find replacement: original order details are missing a strike price. Restarting flow.")
                 return None, "REPLACEMENT_NOT_FOUND"
 
             replacement_order = find_replacement_order(client, account_hash, order_id, instrument_details)
