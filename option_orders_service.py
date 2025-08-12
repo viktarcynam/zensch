@@ -349,6 +349,7 @@ class OptionOrdersService:
                 "orderStrategyType": "SINGLE",
                 "orderLegCollection": [
                     {
+                        "instruction": side,
                         "quantity": quantity,
                         "instrument": {
                             "symbol": option_symbol,
