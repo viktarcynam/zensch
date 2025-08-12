@@ -724,8 +724,8 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
                             return
 
                         if closing_status == "FILLED":
-                            entry_price = filled_order.get('orderLegCollection', [{}])[0].get('price')
-                            exit_price = filled_closing_order.get('orderLegCollection', [{}])[0].get('price')
+                            entry_price = filled_order.get('orderActivityCollection', [{}])[0].get('executionLegs', [{}])[0].get('price')
+                            exit_price = filled_closing_order.get('orderActivityCollection', [{}])[0].get('executionLegs', [{}])[0].get('price')
 
                             print("\n--- Trade Summary ---")
                             print(f"Action: {side}")
