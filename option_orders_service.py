@@ -193,14 +193,6 @@ class OptionOrdersService:
             if order_type in ["STOP", "STOP_LIMIT"] and stop_price is not None:
                 order_params["stopPrice"] = stop_price
             
-            # Debug: Save order parameters to a file
-            try:
-                with open('debug_place_order_data.json', 'w') as f:
-                    json.dump(order_params, f, indent=2)
-                logger.info("Saved place_option_order data to debug_place_order_data.json")
-            except Exception as e:
-                logger.error(f"Failed to write debug file for place_option_order: {e}")
-
             # Place the order
             response = self.schwab_client.order_place(account_id, order_params)
             
@@ -376,14 +368,6 @@ class OptionOrdersService:
             if order_type in ["STOP", "STOP_LIMIT"] and stop_price is not None:
                 order_params["stopPrice"] = stop_price
             
-            # Debug: Save order parameters to a file
-            try:
-                with open('debug_replace_order_data.json', 'w') as f:
-                    json.dump(order_params, f, indent=2)
-                logger.info("Saved replace_option_order data to debug_replace_order_data.json")
-            except Exception as e:
-                logger.error(f"Failed to write debug file for replace_option_order: {e}")
-
             # Replace the order
             response = self.schwab_client.order_replace(account_id, order_id, order_params)
             

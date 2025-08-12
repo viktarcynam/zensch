@@ -194,6 +194,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
 
                     market_bid = None
                     market_ask = None
+                    option_list_data = None
                     if latest_quote_response.get('success') and latest_quote_response.get('data'):
                         oc_data = latest_quote_response['data']
                         is_call = order_to_monitor['putCall'] == 'CALL'
@@ -201,28 +202,23 @@ def poll_order_status(client, account_hash, order_to_monitor):
                         date_key = next((k for k in exp_map if k.startswith(order_to_monitor['expiry'])), None)
                         if date_key:
                             strike_map = exp_map.get(date_key, {})
-                            option_list = strike_map.get(str(float(order_to_monitor['strike'])), [None])[0]
-                            if option_list:
-                                market_bid = option_list.get('bid')
-                                market_ask = option_list.get('ask')
+                            option_list_data = strike_map.get(str(float(order_to_monitor['strike'])), [None])[0]
+                            if option_list_data:
+                                market_bid = option_list_data.get('bid')
+                                market_ask = option_list_data.get('ask')
                                 print(f"Current Market: Bid: {format_price(market_bid)} / Ask: {format_price(market_ask)}")
 
                     if market_bid is None or market_ask is None:
                         print("Could not retrieve current market price. Cannot perform price validation. Aborting adjustment.")
-                        # Set terminal back to cbreak mode
                         tty.setcbreak(sys.stdin.fileno())
                         print("\nResuming monitoring...", end="", flush=True)
                         continue
 
-                    # 2. Loop for new price input and validation
+                    # Loop for new price input and validation
                     while True:
                         new_price_str = input("Enter new limit price, relative adjustment (e.g., +5), or 'c' to cancel: ").strip()
 
-                        if not new_price_str:
-                            print("Empty input. Adjustment cancelled.")
-                            break
-
-                        if new_price_str.lower() == 'c':
+                        if not new_price_str or new_price_str.lower() == 'c':
                             print("Adjustment cancelled.")
                             break
 
@@ -237,7 +233,6 @@ def poll_order_status(client, account_hash, order_to_monitor):
                             print("Invalid input. Please enter a number, a relative adjustment like '+5', or 'c'.")
                             continue
 
-                        # 3. Validate the new price
                         if new_price <= 0:
                             print(f"Invalid price. New price must be positive. You entered: {format_price(new_price)}")
                             continue
@@ -247,14 +242,32 @@ def poll_order_status(client, account_hash, order_to_monitor):
                             if new_price > market_ask:
                                 print(f"Invalid price for buy order. Price ({format_price(new_price)}) cannot be higher than ask ({format_price(market_ask)}).")
                                 continue
-                        else: # is_sell_order
+                        else:
                             if new_price < market_bid:
                                 print(f"Invalid price for sell order. Price ({format_price(new_price)}) cannot be lower than bid ({format_price(market_bid)}).")
                                 continue
 
-                        print(f"New price {format_price(new_price)} is valid. Replacing order...")
+                        # Re-calculate side based on the working example's logic
+                        action = 'B' if is_buy_order else 'S'
+                        positions_response = client.get_positions_by_symbol(symbol=order_to_monitor['symbol'], account_hash=account_hash)
+                        has_position = False
+                        if positions_response.get('success') and positions_response.get('data'):
+                            accounts = positions_response.get('data', {}).get('accounts', [])
+                            for acc in accounts:
+                                for pos in acc.get('positions', []):
+                                    if pos.get('instrument', {}).get('symbol') == option_list_data.get('symbol'):
+                                        if pos.get('longQuantity', 0) - pos.get('shortQuantity', 0) > 0:
+                                            has_position = True
+                                            break
+                                if has_position:
+                                    break
 
-                        # 4. Replace the order
+                        side = "BUY_TO_OPEN"
+                        if action == 'S':
+                            side = "SELL_TO_CLOSE" if has_position else "SELL_TO_OPEN"
+
+                        print(f"New price {format_price(new_price)} is valid. Replacing order with side '{side}'...")
+
                         replace_response = client.replace_option_order(
                             account_id=account_hash,
                             order_id=str(current_order_id),
@@ -263,7 +276,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
                             expiration_date=order_to_monitor['expiry'],
                             strike_price=order_to_monitor['strike'],
                             quantity=order_to_monitor['quantity'],
-                            side=order_to_monitor['instruction'],
+                            side=side,
                             order_type="LIMIT",
                             price=new_price
                         )
