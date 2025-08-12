@@ -379,7 +379,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
                     print(f"DEBUG: Saved filled order details to {details_filename}")
 
                     # Save position details
-                    positions_response = client.get_account_positions(account_id=account_hash)
+                    positions_response = client.get_positions(account_hash=account_hash)
                     if positions_response.get('success'):
                         positions_filename = f"positions_at_fill_{order_id_for_file}.json"
                         with open(positions_filename, 'w') as f:
