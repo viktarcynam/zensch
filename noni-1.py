@@ -72,6 +72,37 @@ def get_next_friday():
     next_friday = today + timedelta(days=days_until_friday)
     return next_friday.strftime('%Y-%m-%d')
 
+
+def parse_option_position_details(position: dict) -> dict or None:
+    """
+    Parses an option position object to extract key details.
+    The description string is parsed for strike and expiry.
+    Returns a dictionary with details, or None on failure.
+    """
+    try:
+        if position.get('assetType') != 'OPTION':
+            return None
+
+        description = position.get('description', '')
+        # Example: "WEBULL CORP 08/15/2025 $15.5 Put"
+        desc_parts = description.split(' ')
+        desc_expiry_str = desc_parts[-3]
+        desc_strike_str = desc_parts[-2].replace('$', '')
+
+        desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
+        desc_strike = float(desc_strike_str)
+
+        quantity = position.get('longQuantity', 0) - position.get('shortQuantity', 0)
+
+        return {
+            "put_call": position.get('putCall'),
+            "strike": desc_strike,
+            "expiry": desc_expiry,
+            "quantity": quantity
+        }
+    except (ValueError, IndexError, TypeError):
+        return None
+
 def find_replacement_order(client, account_hash, original_order):
     """
     Find the new order that replaced an old one.
@@ -143,7 +174,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
             rlist, _, _ = select.select([sys.stdin], [], [], wait_time)
 
             if rlist:
-                char = sys.stdin.read(1).lower()
+                char = sys.stdin.read(1) # Case-sensitive
                 if char == 'a':
                     # Restore terminal for standard input
                     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
@@ -186,6 +217,10 @@ def poll_order_status(client, account_hash, order_to_monitor):
                     # 2. Loop for new price input and validation
                     while True:
                         new_price_str = input("Enter new limit price, relative adjustment (e.g., +5), or 'c' to cancel: ").strip()
+
+                        if not new_price_str:
+                            print("Empty input. Adjustment cancelled.")
+                            break
 
                         if new_price_str.lower() == 'c':
                             print("Adjustment cancelled.")
@@ -244,9 +279,40 @@ def poll_order_status(client, account_hash, order_to_monitor):
                     # Set terminal back to cbreak mode for polling
                     tty.setcbreak(sys.stdin.fileno())
                     print("\nResuming monitoring...", end="", flush=True)
-                elif char == 'q':
+                elif char == 'Q':
                     # Restore terminal for standard input
                     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
+                    # Check for existing positions before confirming cancel
+                    print("\nChecking for existing positions for this instrument...")
+                    positions_response = client.get_positions_by_symbol(symbol=order_to_monitor['symbol'], account_hash=account_hash)
+                    found_position = False
+                    if positions_response.get('success') and positions_response.get('data'):
+                        accounts = positions_response.get('data', {}).get('accounts', [])
+                        for acc in accounts:
+                            for pos in acc.get('positions', []):
+                                pos_details = parse_option_position_details(pos)
+                                if not pos_details:
+                                    continue
+
+                                # Check if position matches the order being cancelled
+                                if (pos_details['put_call'] == order_to_monitor['putCall'] and
+                                    abs(pos_details['strike'] - order_to_monitor['strike']) < 0.001 and
+                                    pos_details['expiry'] == order_to_monitor['expiry']):
+
+                                    if pos_details['quantity'] != 0:
+                                        qty_str = f"+{int(pos_details['quantity'])}" if pos_details['quantity'] > 0 else str(int(pos_details['quantity']))
+                                        print("\n" + "="*20 + " WARNING " + "="*20)
+                                        print(f"  You have an existing position of {qty_str} contracts for this option.")
+                                        print("  Cancelling this order may leave the position open.")
+                                        print("="*49)
+                                        found_position = True
+                                        break
+                            if found_position:
+                                break
+
+                    if not found_position:
+                        print("No existing position found for this instrument.")
 
                     try:
                         confirm = input("\nAre you sure you want to cancel this order? (y/n): ").lower()
@@ -632,21 +698,14 @@ def noni_1_main():
                             if pos.get('assetType') == 'EQUITY':
                                 stock_positions.append(f"STOCK: {int(qty)}")
                             elif pos.get('assetType') == 'OPTION':
-                                try:
-                                    put_call = pos.get('putCall')
-                                    description = pos.get('description', '')
-                                    desc_parts = description.split(' ')
-                                    desc_expiry_str = desc_parts[-3]
-                                    desc_strike_str = desc_parts[-2].replace('$', '')
-
-                                    desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
-                                    desc_strike = float(desc_strike_str)
-
-                                    qty_str = f"+{int(qty)}" if qty > 0 else str(int(qty))
-
-                                    option_positions.append(f"{qty_str} {put_call}; Strike: {desc_strike}; Expiry {desc_expiry}")
-                                except (ValueError, IndexError):
-                                    option_positions.append(f"{int(qty)} of {description}") # Fallback
+                                details = parse_option_position_details(pos)
+                                if details:
+                                    qty_str = f"+{int(details['quantity'])}" if details['quantity'] > 0 else str(int(details['quantity']))
+                                    option_positions.append(f"{qty_str} {details['put_call']}; Strike: {details['strike']}; Expiry {details['expiry']}")
+                                else:
+                                    # Fallback for parsing failure
+                                    qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+                                    option_positions.append(f"{int(qty)} of {pos.get('description', 'Unknown Option')}")
 
                 if stock_positions or option_positions:
                     print(f"\n{symbol.upper()} Positions:")
