@@ -369,6 +369,28 @@ def poll_order_status(client, account_hash, order_to_monitor):
 
             if status == 'FILLED':
                 print("\nOrder filled!")
+                # --- BEGIN DEBUG CODE ---
+                try:
+                    order_id_for_file = order_details.get('orderId', 'unknown_order')
+                    # Save order details
+                    details_filename = f"filled_order_details_{order_id_for_file}.json"
+                    with open(details_filename, 'w') as f:
+                        json.dump(order_details, f, indent=2)
+                    print(f"DEBUG: Saved filled order details to {details_filename}")
+
+                    # Save position details
+                    positions_response = client.get_account_positions(account_id=account_hash)
+                    if positions_response.get('success'):
+                        positions_filename = f"positions_at_fill_{order_id_for_file}.json"
+                        with open(positions_filename, 'w') as f:
+                            json.dump(positions_response.get('data', {}), f, indent=2)
+                        print(f"DEBUG: Saved position details to {positions_filename}")
+                    else:
+                        print("DEBUG: Could not fetch position details at time of fill.")
+
+                except Exception as e:
+                    print(f"DEBUG: An error occurred during debug file generation: {e}")
+                # --- END DEBUG CODE ---
                 return order_details, "FILLED"
             elif status == 'REPLACED':
                 print(f"\nOrder {current_order_id} has been replaced.")
