@@ -298,7 +298,24 @@ def poll_order_status(client, account_hash, order_to_monitor):
 
                         print_response("Replace Order Result", replace_response)
                         if replace_response.get('success'):
-                            print("Order replace request sent successfully. Polling will now monitor the new order status.")
+                            # Extract the new order ID from the successful response
+                            new_order_id = replace_response.get('data', {}).get('new_order_id')
+                            if new_order_id:
+                                print(f"Order replace successful. Now monitoring new order ID: {new_order_id}")
+                                # --- UPDATE STATE TO MONITOR THE NEW ORDER ---
+                                current_order_id = new_order_id
+                                order_to_monitor['orderId'] = new_order_id
+                                order_to_monitor['price'] = new_price
+                                order_to_monitor['instruction'] = side # Update instruction based on new side
+
+                                # Rebuild the summary string for display
+                                order_summary = (f"{order_to_monitor['instruction'].replace('_', ' ')} {int(order_to_monitor['quantity'])} "
+                                                 f"{order_to_monitor['putCall'].lower()} strike {format_price(order_to_monitor['strike'])} "
+                                                 f"with limit price {format_price(order_to_monitor['price'])}")
+                                poll_count = 0 # Reset poll counter for the new order
+                            else:
+                                # This case handles if the server response changes format unexpectedly
+                                print("WARNING: Replacement reported success, but no new order ID was returned. The app may not track the new order correctly.")
                         else:
                             print(f"Failed to replace order: {replace_response.get('error')}")
 
