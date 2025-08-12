@@ -78,6 +78,23 @@ def find_replacement_order(client, account_hash, original_order):
                     if candidate_strike is None:
                         continue
 
+                    # --- Start Debug Prints ---
+                    print("\n--- COMPARING ORDERS ---")
+                    print(f"  ORIGINAL -> Symbol: {original_order['symbol']}, Type: {original_order['putCall']}, Strike: {original_order['strike']}, Expiry: {original_order['expiry']}, Instruction: {original_order['instruction']}")
+
+                    desc_expiry = None
+                    try:
+                        desc_parts = instrument.get('description', '').split(' ')
+                        if len(desc_parts) > 2:
+                            desc_expiry_str = desc_parts[-3]
+                            desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
+                    except Exception as e:
+                        desc_expiry = f"PARSE_ERROR: {e}"
+
+                    print(f"  CANDIDATE -> Symbol: {instrument.get('underlyingSymbol')}, Type: {instrument.get('putCall')}, Strike: {candidate_strike}, Expiry: {desc_expiry}, Instruction: {leg.get('instruction')}")
+                    print("----------------------")
+                    # --- End Debug Prints ---
+
                     # Compare all key details. Price is expected to be different.
                     if (instrument.get('underlyingSymbol') == original_order['symbol'] and
                         instrument.get('putCall') == original_order['putCall'] and
