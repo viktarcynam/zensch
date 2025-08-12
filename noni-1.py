@@ -691,7 +691,14 @@ def noni_1_main():
                 suggested_expiry = get_next_friday()
 
                 strike_price_str = input(f"Enter strike price (default: {format_price(suggested_strike)}): ")
-                strike_price = float(strike_price_str) if strike_price_str else suggested_strike
+                if strike_price_str:
+                    try:
+                        strike_price = float(strike_price_str)
+                    except ValueError:
+                        print("Invalid strike price entered. Using default.")
+                        strike_price = suggested_strike
+                else:
+                    strike_price = suggested_strike
 
                 expiry_date_str = input(f"Enter option expiry date (YYYY-MM-DD, default: {suggested_expiry}): ")
                 expiry_date = expiry_date_str if expiry_date_str else suggested_expiry
