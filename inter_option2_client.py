@@ -182,7 +182,27 @@ def poll_order_status(client, account_hash, order_to_monitor):
                 poll_count = 0 # Reset poll count for the new order
                 continue # Continue the loop to poll the new order immediately
             else:
-                print("Could not find replacement order. Restarting flow.")
+                print("Could not find replacement order with the expected statuses. Dumping all recent orders for debugging...")
+                try:
+                    from_time = datetime.now() - timedelta(hours=1)
+                    to_time = datetime.now()
+
+                    all_orders_response = client.get_option_orders(
+                        account_id=account_hash,
+                        from_entered_time=from_time.isoformat(),
+                        to_entered_time=to_time.isoformat()
+                    )
+
+                    if all_orders_response.get('success'):
+                        with open("debug_all_orders.json", "w") as f:
+                            json.dump(all_orders_response.get('data', []), f, indent=2)
+                        print("Wrote all orders from the last hour to debug_all_orders.json")
+                    else:
+                        print(f"Failed to retrieve all recent orders for debugging: {all_orders_response.get('error')}")
+                except Exception as e:
+                    print(f"An error occurred during fallback debug logging: {e}")
+
+                print("Restarting flow.")
                 return None, "REPLACEMENT_NOT_FOUND"
         elif status in ['CANCELED', 'EXPIRED', 'REJECTED']:
             print(f"\nOrder not filled. Status: {status}")
