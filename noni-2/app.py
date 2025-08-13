@@ -33,6 +33,34 @@ def get_next_friday():
     next_friday = today + timedelta(days=days_until_friday)
     return next_friday.strftime('%Y-%m-%d')
 
+def parse_option_position_details(position: dict) -> dict or None:
+    """
+    Parses an option position object to extract key details.
+    """
+    try:
+        if position.get('assetType') != 'OPTION':
+            return None
+
+        description = position.get('description', '')
+        # Example: "WEBULL CORP 08/15/2025 $15.5 Put"
+        desc_parts = description.split(' ')
+        desc_expiry_str = desc_parts[-3]
+        desc_strike_str = desc_parts[-2].replace('$', '')
+
+        desc_expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
+        desc_strike = float(desc_strike_str)
+
+        quantity = position.get('longQuantity', 0) - position.get('shortQuantity', 0)
+
+        return {
+            "put_call": position.get('putCall'),
+            "strike": desc_strike,
+            "expiry": desc_expiry,
+            "quantity": quantity
+        }
+    except (ValueError, IndexError, TypeError):
+        return None
+
 
 # --- State Management ---
 # Simplified for a single active trade model based on new UI
@@ -89,8 +117,30 @@ def get_positions(symbol):
 
     with SchwabClient() as client:
         positions_response = client.get_positions_by_symbol(symbol=symbol.upper(), account_hash=account_hash)
-        if positions_response.get('success'):
-            return jsonify({"success": True, "data": positions_response.get('data', {})})
+        if positions_response.get('success') and positions_response.get('data'):
+            position_strings = []
+            accounts = positions_response.get('data', {}).get('accounts', [])
+            for acc in accounts:
+                for pos in acc.get('positions', []):
+                    qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+                    if qty == 0:
+                        continue
+
+                    if pos.get('assetType') == 'EQUITY':
+                        position_strings.append(f"STOCK: {int(qty)}")
+                    elif pos.get('assetType') == 'OPTION':
+                        details = parse_option_position_details(pos)
+                        if details:
+                            qty_str = f"+{int(details['quantity'])}" if details['quantity'] > 0 else str(int(details['quantity']))
+                            position_strings.append(f"{qty_str} {details['put_call']} Strk:{details['strike']} Exp:{details['expiry']}")
+                        else:
+                            position_strings.append(f"{int(qty)} of {pos.get('description', 'Unknown Option')}")
+
+            if not position_strings:
+                return jsonify({"success": True, "display_text": "No Pos"})
+
+            return jsonify({"success": True, "display_text": " | ".join(position_strings)})
+
     return jsonify({"success": False, "error": f"Could not retrieve positions for {symbol}."}), 500
 
 @app.route('/api/options/<symbol>/<strike>/<expiry>', methods=['GET'])

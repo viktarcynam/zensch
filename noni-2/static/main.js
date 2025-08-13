@@ -61,19 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`/api/positions/${symbol}?account_hash=${accountHash}`);
             const data = await response.json();
-            if (data.success && data.data.accounts && data.data.accounts.length > 0) {
-                const positions = data.data.accounts[0].positions;
-                if (positions && positions.length > 0) {
-                    const summary = positions.map(p => {
-                        const qty = p.longQuantity - p.shortQuantity;
-                        return `${qty > 0 ? '+' : ''}${Math.round(qty)} ${p.instrument.symbol}`;
-                    }).join(', ');
-                    positionDisplay.textContent = summary;
-                } else {
-                     positionDisplay.textContent = 'No Pos';
-                }
+            if (data.success) {
+                positionDisplay.textContent = data.display_text;
             } else {
-                positionDisplay.textContent = 'No Pos';
+                positionDisplay.textContent = 'Error';
             }
         } catch (error) {
             console.error('Error fetching positions:', error);
