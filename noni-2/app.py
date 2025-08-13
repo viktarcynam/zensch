@@ -174,14 +174,24 @@ def handle_order():
             # Backend determines the correct 'side'
             action = new_order_details.pop('simple_action') # 'BUY' or 'SELL'
 
+            print(f"--- ORDER DEBUG ---")
+            print(f"Received simple_action: {action}")
+            print(f"Current trade_side state: {active_trade.get('trade_side')}")
+
             if action == 'BUY':
                 new_order_details['side'] = 'BUY_TO_CLOSE' if active_trade.get('trade_side') == 'short' else 'BUY_TO_OPEN'
             else: # SELL
                 new_order_details['side'] = 'SELL_TO_CLOSE' if active_trade.get('trade_side') == 'long' else 'SELL_TO_OPEN'
 
+            print(f"Determined side: {new_order_details['side']}")
+            print(f"-------------------")
+
             # If there's no active order, just place it.
             if not active_trade.get('order_id') or active_trade.get('status') not in ['WORKING', 'PENDING_ACTIVATION']:
-                response = client.place_option_order(**new_order_details)
+                # --- DRY RUN ---
+                # response = client.place_option_order(**new_order_details)
+                response = {'success': True, 'data': {'order_id': 'dry_run_order_123'}} # Fake response
+                # --- END DRY RUN ---
                 if response.get('success'):
                     order_id = response.get('data', {}).get('order_id')
                     active_trade.update(order_id=order_id, status='WORKING', details=new_order_details, instrument_position=0)
@@ -195,11 +205,17 @@ def handle_order():
                 # A full replace/cancel-re-place logic is complex.
                 # For now, we will just cancel the old and place the new.
                 current_details = active_trade['details']
-                cancel_response = client.cancel_option_order(account_id=current_details['account_id'], order_id=active_trade['order_id'])
+                # --- DRY RUN ---
+                # cancel_response = client.cancel_option_order(account_id=current_details['account_id'], order_id=active_trade['order_id'])
+                cancel_response = {'success': True} # Fake response
+                # --- END DRY RUN ---
                 if not cancel_response.get('success'):
                     return jsonify({"success": False, "error": f"Failed to cancel previous order: {cancel_response.get('error')}"}), 500
 
-                place_response = client.place_option_order(**new_order_details)
+                # --- DRY RUN ---
+                # place_response = client.place_option_order(**new_order_details)
+                place_response = {'success': True, 'data': {'order_id': 'dry_run_order_456'}} # Fake response
+                # --- END DRY RUN ---
                 if place_response.get('success'):
                     order_id = place_response.get('data', {}).get('order_id')
                     active_trade.update(order_id=order_id, status='WORKING', details=new_order_details) # instrument_position is not reset here
@@ -209,7 +225,10 @@ def handle_order():
 
         elif order_action == 'cancel':
             if active_trade.get('order_id'):
-                response = client.cancel_option_order(account_id=active_trade['details']['account_id'], order_id=active_trade['order_id'])
+                # --- DRY RUN ---
+                # response = client.cancel_option_order(account_id=active_trade['details']['account_id'], order_id=active_trade['order_id'])
+                response = {'success': True} # Fake response
+                # --- END DRY RUN ---
                 if response.get('success'):
                     # Reset everything except the instrument position, because we might still hold it.
                     active_trade.update(order_id=None, status='CANCELED', details={})
