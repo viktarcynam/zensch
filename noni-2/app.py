@@ -174,18 +174,10 @@ def handle_order():
             # Backend determines the correct 'side'
             action = new_order_details.pop('simple_action') # 'BUY' or 'SELL'
 
-            print(f"--- ORDER DEBUG ---")
-            print(f"Received simple_action: {action}")
-            print(f"Current trade_side state: {active_trade.get('trade_side')}")
-
             if action == 'BUY':
                 new_order_details['side'] = 'BUY_TO_CLOSE' if active_trade.get('trade_side') == 'short' else 'BUY_TO_OPEN'
             else: # SELL
                 new_order_details['side'] = 'SELL_TO_CLOSE' if active_trade.get('trade_side') == 'long' else 'SELL_TO_OPEN'
-
-            print(f"Determined side: {new_order_details['side']}")
-            print(f"-------------------")
-
 
             # If there's no active order, just place it.
             if not active_trade.get('order_id') or active_trade.get('status') not in ['WORKING', 'PENDING_ACTIVATION']:

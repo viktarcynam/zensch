@@ -127,49 +127,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const handleOrderPlacement = async (action, optionType) => {
-        if (!accountHash) {
-            statusDisplay.textContent = 'Account not loaded.';
-            return;
-        }
-
-        const priceInputId = `${optionType.toLowerCase()}${action.toLowerCase()}-price`;
-        const priceInput = document.getElementById(priceInputId);
-
-        // Frontend now sends a simpler request, backend determines the full 'side'
-        const orderDetails = {
-            account_id: accountHash,
-            symbol: symbolInput.value.trim().toUpperCase(),
-            option_type: optionType === 'C' ? 'CALL' : 'PUT',
-            expiration_date: expiryInput.value,
-            strike_price: parseFloat(strikeInput.value),
-            quantity: 1,
-            simple_action: action, // 'B' or 'S'
-            order_type: 'LIMIT',
-            price: parseFloat(priceInput.value)
-        };
-
-        try {
-            inProgressPositionDisplay.textContent = '0'; // Set to 0 on new order attempt
-            const response = await fetch('/api/order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'place_or_replace', order_details: orderDetails })
-            });
-            const data = await response.json();
-            if (data.success) {
-                statusDisplay.textContent = `${data.trade_status} ${orderDetails.symbol} ${orderDetails.strike_price}${orderDetails.option_type[0]} @ ${orderDetails.price}`;
-                activeOrder = orderDetails;
-                activeOrder.orderId = data.order_id;
-                if (statusPollInterval) clearInterval(statusPollInterval);
-                statusPollInterval = setInterval(pollOrderStatus, 4000);
-            } else {
-                statusDisplay.textContent = `Error: ${data.error}`;
+    const createOrderPlacementHandler = (action, optionType) => {
+        return async () => {
+            if (!accountHash) {
+                statusDisplay.textContent = 'Account not loaded.';
+                return;
             }
-        } catch (error) {
-            console.error('Error placing order:', error);
-            statusDisplay.textContent = 'API Error.';
-        }
+
+            const priceInputId = `${optionType.toLowerCase()}${action.toLowerCase()}-price`;
+            const priceInput = document.getElementById(priceInputId);
+
+            const orderDetails = {
+                account_id: accountHash,
+                symbol: symbolInput.value.trim().toUpperCase(),
+                option_type: optionType === 'C' ? 'CALL' : 'PUT',
+                expiration_date: expiryInput.value,
+                strike_price: parseFloat(strikeInput.value),
+                quantity: 1,
+                simple_action: action, // 'B' or 'S'
+                order_type: 'LIMIT',
+                price: parseFloat(priceInput.value)
+            };
+
+            try {
+                inProgressPositionDisplay.textContent = '0';
+                const response = await fetch('/api/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'place_or_replace', order_details: orderDetails })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    statusDisplay.textContent = `${data.trade_status} ${orderDetails.symbol} ${orderDetails.strike_price}${orderDetails.option_type[0]} @ ${orderDetails.price}`;
+                    activeOrder = orderDetails;
+                    activeOrder.orderId = data.order_id;
+                    if (statusPollInterval) clearInterval(statusPollInterval);
+                    statusPollInterval = setInterval(pollOrderStatus, 4000);
+                } else {
+                    statusDisplay.textContent = `Error: ${data.error}`;
+                }
+            } catch (error) {
+                console.error('Error placing order:', error);
+                statusDisplay.textContent = 'API Error.';
+            }
+        };
     };
 
     const handleCancel = async () => {
@@ -265,10 +266,10 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchPositions();
         positionPollInterval = setInterval(fetchPositions, 15000);
     });
-    cbBtn.addEventListener('click', () => handleOrderPlacement('B', 'C'));
-    csBtn.addEventListener('click', () => handleOrderPlacement('S', 'C'));
-    pbBtn.addEventListener('click', () => handleOrderPlacement('B', 'P'));
-    psBtn.addEventListener('click', () => handleOrderPlacement('S', 'P'));
+    cbBtn.addEventListener('click', createOrderPlacementHandler('B', 'C'));
+    csBtn.addEventListener('click', createOrderPlacementHandler('S', 'C'));
+    pbBtn.addEventListener('click', createOrderPlacementHandler('B', 'P'));
+    psBtn.addEventListener('click', createOrderPlacementHandler('S', 'P'));
     cancelBtn.addEventListener('click', handleCancel);
 
     // --- Start the app ---
