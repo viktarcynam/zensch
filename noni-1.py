@@ -329,24 +329,25 @@ def poll_order_status(client, account_hash, order_to_monitor):
                                 print(f"Invalid price for sell order. Price ({format_price(new_price)}) cannot be lower than bid ({format_price(market_bid)}).")
                                 continue
 
-                        # Re-calculate side based on the working example's logic
+                        # Re-calculate side based on current positions
                         action = 'B' if is_buy_order else 'S'
                         positions_response = client.get_positions_by_symbol(symbol=order_to_monitor['symbol'], account_hash=account_hash)
-                        has_position = False
+                        current_quantity = 0
                         if positions_response.get('success') and positions_response.get('data'):
                             accounts = positions_response.get('data', {}).get('accounts', [])
                             for acc in accounts:
                                 for pos in acc.get('positions', []):
                                     if pos.get('instrument', {}).get('symbol') == option_list_data.get('symbol'):
-                                        if pos.get('longQuantity', 0) - pos.get('shortQuantity', 0) > 0:
-                                            has_position = True
-                                            break
-                                if has_position:
+                                        current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+                                        break
+                                if current_quantity != 0:
                                     break
 
-                        side = "BUY_TO_OPEN"
-                        if action == 'S':
-                            side = "SELL_TO_CLOSE" if has_position else "SELL_TO_OPEN"
+                        side = ""
+                        if action == 'B':
+                            side = "BUY_TO_CLOSE" if current_quantity < 0 else "BUY_TO_OPEN"
+                        else:  # 'S'
+                            side = "SELL_TO_CLOSE" if current_quantity > 0 else "SELL_TO_OPEN"
 
                         print(f"New price {format_price(new_price)} is valid. Replacing order with side '{side}'...")
 
@@ -780,11 +781,22 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
     quantity = 1
 
     # Determine side
+    current_quantity = 0
+    if positions_response.get('success') and positions_response.get('data'):
+        accounts = positions_response.get('data', {}).get('accounts', [])
+        for acc in accounts:
+            for pos in acc.get('positions', []):
+                if pos.get('instrument', {}).get('symbol') == target_option_data.get('symbol'):
+                    current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+                    break
+            if current_quantity != 0:
+                break
+
     side = ""
     if action == 'B':
-        side = "BUY_TO_OPEN"
-    else: # 'S'
-        side = "SELL_TO_CLOSE" if any(p['instrument'].get('symbol') == target_option_data['symbol'] for p in positions_response.get('positions',[])) else "SELL_TO_OPEN"
+        side = "BUY_TO_CLOSE" if current_quantity < 0 else "BUY_TO_OPEN"
+    else:  # 'S'
+        side = "SELL_TO_CLOSE" if current_quantity > 0 else "SELL_TO_OPEN"
 
     # Place opening order
     order_response = client.place_option_order(
