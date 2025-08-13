@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 strikeInput.value = data.strike;
                 expiryInput.value = data.expiry;
-                handleInputChange(); // Trigger quote refresh check
+                handleInputChange();
             }
         } catch (error) {
             console.error('Error fetching defaults:', error);
@@ -74,13 +74,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const fetchOptionQuotes = async () => {
+    const fetchQuoteAndInstrumentPosition = async () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
-        if (!symbol || !strike || !expiry) {
+        const optionTypeCall = 'CALL';
+        const optionTypePut = 'PUT';
+
+        if (!symbol || !strike || !expiry || !accountHash) {
             return; // Silently return if fields are not ready
         }
+
+        // Fetch quotes
         try {
             const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
             const data = await response.json();
@@ -111,11 +116,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             } else {
-                // Don't show error for polling, just log it
                 console.error("Error fetching options.");
             }
         } catch (error) {
             console.error('Error fetching options:', error);
+        }
+
+        // Fetch instrument position
+        try {
+            const posResponse = await fetch(`/api/instrument_position?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}&option_type=${activeOrder?.option_type || 'CALL'}`); // Default to CALL if no active order
+            const posData = await posResponse.json();
+            if (posData.success) {
+                const position = posData.quantity || 0;
+                if (position !== 0) {
+                    inProgressPositionDisplay.textContent = `${position > 0 ? '+' : ''}${position} ${activeOrder?.option_type || ''}`;
+                } else {
+                    inProgressPositionDisplay.textContent = '0';
+                }
+            }
+        } catch(error) {
+            console.error('Error fetching instrument position:', error);
         }
     };
 
@@ -127,55 +147,52 @@ document.addEventListener('DOMContentLoaded', () => {
         const expiry = expiryInput.value;
 
         if (symbol && strike && expiry) {
-            fetchOptionQuotes(); // Fetch immediately
-            quotePollInterval = setInterval(fetchOptionQuotes, 5000); // And then poll
+            fetchQuoteAndInstrumentPosition();
+            quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 5000);
         }
     };
 
-    const createOrderPlacementHandler = (action, optionType) => {
-        return async () => {
-            if (!accountHash) {
-                statusDisplay.textContent = 'Account not loaded.';
-                return;
-            }
+    const handleOrderPlacement = async (action, optionType) => {
+        if (!accountHash) {
+            statusDisplay.textContent = 'Account not loaded.';
+            return;
+        }
 
-            const priceInputId = `${optionType.toLowerCase()}${action.toLowerCase()}-price`;
-            const priceInput = document.getElementById(priceInputId);
+        const priceInputId = `${optionType.toLowerCase()}${action.toLowerCase()}-price`;
+        const priceInput = document.getElementById(priceInputId);
 
-            const orderDetails = {
-                account_id: accountHash,
-                symbol: symbolInput.value.trim().toUpperCase(),
-                option_type: optionType === 'C' ? 'CALL' : 'PUT',
-                expiration_date: expiryInput.value,
-                strike_price: parseFloat(strikeInput.value),
-                quantity: 1,
-                simple_action: action, // 'B' or 'S'
-                order_type: 'LIMIT',
-                price: parseFloat(priceInput.value)
-            };
+        const orderDetails = {
+            account_id: accountHash,
+            symbol: symbolInput.value.trim().toUpperCase(),
+            option_type: optionType,
+            expiration_date: expiryInput.value,
+            strike_price: parseFloat(strikeInput.value),
+            quantity: 1,
+            simple_action: action,
+            order_type: 'LIMIT',
+            price: parseFloat(priceInput.value)
+        };
 
-            try {
-                inProgressPositionDisplay.textContent = '0';
-                const response = await fetch('/api/order', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'place_or_replace', order_details: orderDetails })
-                });
-                const data = await response.json();
-                if (data.success) {
+        try {
+            const response = await fetch('/api/order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'place_or_replace', order_details: orderDetails })
+            });
+            const data = await response.json();
+            if (data.success) {
                 isOrderActive = true;
                 activeOrder = { ...orderDetails, side: data.trade_status, orderId: data.order_id };
                 statusDisplay.textContent = `${activeOrder.side} ${activeOrder.symbol} ${activeOrder.strike_price}${activeOrder.option_type[0]} @ ${activeOrder.price}`;
-                    if (statusPollInterval) clearInterval(statusPollInterval);
-                    statusPollInterval = setInterval(pollOrderStatus, 4000);
-                } else {
-                    statusDisplay.textContent = `Error: ${data.error}`;
-                }
-            } catch (error) {
-                console.error('Error placing order:', error);
-                statusDisplay.textContent = 'API Error.';
+                if (statusPollInterval) clearInterval(statusPollInterval);
+                statusPollInterval = setInterval(pollOrderStatus, 4000);
+            } else {
+                statusDisplay.textContent = `Error: ${data.error}`;
             }
-        };
+        } catch (error) {
+            console.error('Error placing order:', error);
+            statusDisplay.textContent = 'API Error.';
+        }
     };
 
     const handleCancel = async () => {
@@ -217,15 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const status = orderData.status;
                 if (!status) return;
 
-                // Update In-Progress Position Display
-                const position = orderData.instrument_position || 0;
-                const putCall = activeOrder.option_type;
-                if (position !== 0) {
-                    inProgressPositionDisplay.textContent = `${position > 0 ? '+' : ''}${position} ${putCall}`;
-                } else {
-                    inProgressPositionDisplay.textContent = '0';
-                }
-
                 const details = activeOrder;
                 statusDisplay.textContent = `${status} ${details.side} ${details.symbol} ${details.strike_price}${details.option_type[0]} @ ${details.price}`;
 
@@ -235,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     isOrderActive = false;
                     if(status === 'FILLED') {
                         statusDisplay.textContent = `FILLED! Ready for next trade.`;
-                        fetchPositions(); // Refresh main position display
+                        fetchPositions();
                     }
                 }
             }
@@ -273,10 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchPositions();
         positionPollInterval = setInterval(fetchPositions, 15000);
     });
-    cbBtn.addEventListener('click', createOrderPlacementHandler('B', 'C'));
-    csBtn.addEventListener('click', createOrderPlacementHandler('S', 'C'));
-    pbBtn.addEventListener('click', createOrderPlacementHandler('B', 'P'));
-    psBtn.addEventListener('click', createOrderPlacementHandler('S', 'P'));
+    cbBtn.addEventListener('click', createOrderPlacementHandler('B', 'CALL'));
+    csBtn.addEventListener('click', createOrderPlacementHandler('S', 'CALL'));
+    pbBtn.addEventListener('click', createOrderPlacementHandler('B', 'PUT'));
+    psBtn.addEventListener('click', createOrderPlacementHandler('S', 'PUT'));
     cancelBtn.addEventListener('click', handleCancel);
 
     // --- Start the app ---

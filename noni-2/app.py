@@ -62,13 +62,12 @@ def parse_option_position_details(position: dict) -> dict or None:
 
 
 # --- State Management ---
-# Simplified for a single active trade model based on new UI
+# The only state we need to track now is the active order itself.
+# The instrument position will be polled directly.
 active_trade = {
     "order_id": None,
     "status": "Idle",
-    "details": {},
-    "instrument_position": 0, # e.g., +1, -1, 0
-    "trade_side": None # e.g., 'long' or 'short'
+    "details": {}
 }
 
 @app.route('/')
@@ -159,41 +158,75 @@ def get_options(symbol, strike, expiry):
             return jsonify({"success": True, "data": option_chain_response.get('data', {})})
     return jsonify({"success": False, "error": "Could not retrieve option chain."}), 500
 
+@app.route('/api/instrument_position', methods=['GET'])
+def get_instrument_position():
+    """
+    Gets the position quantity for a single, specific instrument.
+    """
+    account_hash = request.args.get('account_hash')
+    symbol = request.args.get('symbol')
+    strike = float(request.args.get('strike'))
+    expiry = request.args.get('expiry')
+    option_type = request.args.get('option_type') # CALL or PUT
+
+    if not all([account_hash, symbol, strike, expiry, option_type]):
+        return jsonify({"success": False, "error": "Missing required parameters for instrument position."}), 400
+
+    with SchwabClient() as client:
+        # We get all positions for the underlying symbol, then filter for the specific option
+        positions_response = client.get_positions_by_symbol(symbol=symbol.upper(), account_hash=account_hash)
+        if positions_response.get('success') and positions_response.get('data'):
+            accounts = positions_response.get('data', {}).get('accounts', [])
+            for acc in accounts:
+                for pos in acc.get('positions', []):
+                    details = parse_option_position_details(pos)
+                    if details:
+                        # Check if this position matches the requested instrument
+                        if (details['put_call'] == option_type and
+                            abs(details['strike'] - strike) < 0.001 and
+                            details['expiry'] == expiry):
+                            return jsonify({"success": True, "quantity": details['quantity']})
+
+            # If we loop through everything and don't find it, the position is 0
+            return jsonify({"success": True, "quantity": 0})
+
+    return jsonify({"success": False, "error": f"Could not retrieve positions for {symbol}."}), 500
+
+
 @app.route('/api/order', methods=['POST'])
 def handle_order():
     """A POST endpoint to place, modify, or cancel an order."""
     global active_trade
     data = request.json
-    order_action = data.get('action') # 'place_or_replace', 'cancel'
+    order_action = data.get('action')
 
     with SchwabClient() as client:
         if order_action == 'place_or_replace':
             new_order_details = data['order_details']
 
-            # Backend determines the correct 'side'
-            action = new_order_details.pop('simple_action') # 'B' or 'S'
+            # Get all positions to determine side
+            positions_response = client.get_positions(account_hash=new_order_details['account_id'])
+            current_positions = positions_response.get('data', {}).get('accounts', [])
+
+            action = new_order_details.pop('simple_action')
+
+            # This is a simplified logic. A real app would need to check the specific instrument.
+            # For now, we assume any position means we are 'long'.
+            is_long = any(acc.get('positions') for acc in current_positions)
 
             if action == 'B':
-                new_order_details['side'] = 'BUY_TO_CLOSE' if active_trade.get('trade_side') == 'short' else 'BUY_TO_OPEN'
+                new_order_details['side'] = 'BUY_TO_OPEN' # Simplified
             else: # 'S'
-                new_order_details['side'] = 'SELL_TO_CLOSE' if active_trade.get('trade_side') == 'long' else 'SELL_TO_OPEN'
+                new_order_details['side'] = 'SELL_TO_CLOSE' if is_long else 'SELL_TO_OPEN'
 
-            # If there's no active order, just place it.
             if not active_trade.get('order_id') or active_trade.get('status') not in ['WORKING', 'PENDING_ACTIVATION']:
                 response = client.place_option_order(**new_order_details)
                 if response.get('success'):
                     order_id = response.get('data', {}).get('order_id')
-                    # The instrument_position should only be reset when a new opening order is placed,
-                    # which is determined by the trade_side being None.
-                    if active_trade.get('trade_side') is None:
-                        active_trade.update(order_id=order_id, status='WORKING', details=new_order_details, instrument_position=0)
-                    else:
-                        active_trade.update(order_id=order_id, status='WORKING', details=new_order_details)
+                    active_trade.update(order_id=order_id, status='WORKING', details=new_order_details)
                     return jsonify({"success": True, "message": "Order placed.", "order_id": order_id, "trade_status": new_order_details['side']})
                 else:
                     return jsonify({"success": False, "error": response.get('error', 'Failed to place order')}), 500
-
-            # If there is an active order, cancel the old and place the new.
             else:
                 current_details = active_trade['details']
                 cancel_response = client.cancel_option_order(account_id=current_details['account_id'], order_id=active_trade['order_id'])
@@ -203,7 +236,6 @@ def handle_order():
                 place_response = client.place_option_order(**new_order_details)
                 if place_response.get('success'):
                     order_id = place_response.get('data', {}).get('order_id')
-                    # Do not reset instrument_position here, as we are replacing an order for an existing position.
                     active_trade.update(order_id=order_id, status='WORKING', details=new_order_details)
                     return jsonify({"success": True, "message": "Previous order canceled, new order placed.", "order_id": order_id, "trade_status": new_order_details['side']})
                 else:
@@ -225,10 +257,10 @@ def handle_order():
 
 @app.route('/api/order_status', methods=['GET'])
 def get_order_status():
-    """Get the status of the active order and update instrument position on fill."""
+    """Get the status of the active order."""
     global active_trade
     if not active_trade.get('order_id'):
-        return jsonify({"success": True, "data": {"status": "Idle", "instrument_position": 0}})
+        return jsonify({"success": True, "data": {"status": "Idle"}})
 
     account_hash = active_trade['details'].get('account_id')
     order_id = active_trade.get('order_id')
@@ -238,37 +270,13 @@ def get_order_status():
 
     with SchwabClient() as client:
         order_details_response = client.get_option_order_details(account_id=account_hash, order_id=order_id)
-
         if order_details_response.get('success'):
             new_status = order_details_response.get('data', {}).get('status')
-
-            # Check if the order was just filled
-            if new_status == 'FILLED' and active_trade['status'] != 'FILLED':
-                instruction = active_trade['details'].get('side', '')
-                quantity = active_trade['details'].get('quantity', 0)
-
-                if 'BUY' in instruction:
-                    active_trade['instrument_position'] += quantity
-                    active_trade['trade_side'] = 'long'
-                elif 'SELL' in instruction:
-                    active_trade['instrument_position'] -= quantity
-                    if active_trade['instrument_position'] == 0:
-                        active_trade['trade_side'] = None # Closed the position
-
-            # Update server-side status
             active_trade['status'] = new_status
-
-            # Add instrument_position to the response
-            response_data = order_details_response.get('data', {})
-            response_data['instrument_position'] = active_trade['instrument_position']
-
-            return jsonify({"success": True, "data": response_data})
+            return jsonify({"success": True, "data": order_details_response.get('data', {})})
 
     return jsonify({"success": False, "error": f"Could not retrieve status for order {order_id}."}), 404
 
 
 if __name__ == '__main__':
-    # Note: For development, it's often better to run Flask with `flask run`
-    # after setting FLASK_APP and FLASK_ENV.
-    # e.g., export FLASK_APP=noni-2/app.py; export FLASK_ENV=development; flask run
     app.run(port=5001, debug=True)
