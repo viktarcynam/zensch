@@ -95,8 +95,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 const callMap = data.data.callExpDateMap;
                 const putMap = data.data.putExpDateMap;
-                const callData = callMap?.[Object.keys(callMap)[0]]?.[strike]?.[0];
-                const putData = putMap?.[Object.keys(putMap)[0]]?.[strike]?.[0];
+                const normalizedStrikeKey = parseFloat(strike).toFixed(1);
+
+                const callData = callMap?.[Object.keys(callMap)[0]]?.[normalizedStrikeKey]?.[0];
+                const putData = putMap?.[Object.keys(putMap)[0]]?.[normalizedStrikeKey]?.[0];
 
                 if (callData) {
                     callBidEl.textContent = callData.bid.toFixed(2);
