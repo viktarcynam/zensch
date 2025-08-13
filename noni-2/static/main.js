@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const statusDisplay = document.getElementById('status-display');
+    statusDisplay.textContent = 'JS Loaded. Initializing...';
+
     // --- Element Selectors ---
     const symbolInput = document.getElementById('symbol-input');
     const useBtn = document.getElementById('use-btn');
@@ -36,17 +39,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialization ---
     const init = async () => {
         try {
+            statusDisplay.textContent = 'Fetching account...';
             const response = await fetch('/api/accounts');
+            statusDisplay.textContent = 'Parsing account response...';
             const data = await response.json();
+
             if (data.success) {
                 accountHash = data.account_hash;
+                statusDisplay.textContent = 'Account loaded. Enabling controls...';
                 enableControls();
                 statusDisplay.textContent = 'Idle';
             } else {
-                statusDisplay.textContent = 'Error: Could not load account.';
+                statusDisplay.textContent = `Error: ${data.error || 'Could not load account.'}`;
             }
         } catch (error) {
-            statusDisplay.textContent = 'Error: Backend not reachable.';
+            statusDisplay.textContent = `Catch Error: ${error.message || 'Backend not reachable.'}`;
         }
     };
 
