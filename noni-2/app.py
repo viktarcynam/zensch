@@ -67,7 +67,9 @@ def parse_option_position_details(position: dict) -> dict or None:
 active_trade = {
     "order_id": None,
     "status": "Idle",
-    "details": {}
+    "details": {},
+    "instrument_position": 0, # e.g., +1, -1, 0
+    "trade_side": None # e.g., 'long' or 'short'
 }
 
 @app.route('/')
@@ -169,59 +171,47 @@ def handle_order():
         if order_action == 'place_or_replace':
             new_order_details = data['order_details']
 
+            # Backend determines the correct 'side'
+            action = new_order_details.pop('simple_action') # 'BUY' or 'SELL'
+            if action == 'BUY':
+                new_order_details['side'] = 'BUY_TO_CLOSE' if active_trade.get('trade_side') == 'short' else 'BUY_TO_OPEN'
+            else: # SELL
+                new_order_details['side'] = 'SELL_TO_CLOSE' if active_trade.get('trade_side') == 'long' else 'SELL_TO_OPEN'
+
             # If there's no active order, just place it.
             if not active_trade.get('order_id') or active_trade.get('status') not in ['WORKING', 'PENDING_ACTIVATION']:
                 response = client.place_option_order(**new_order_details)
                 if response.get('success'):
                     order_id = response.get('data', {}).get('order_id')
-                    active_trade = {'order_id': order_id, 'status': 'WORKING', 'details': new_order_details}
-                    return jsonify({"success": True, "message": "Order placed.", "order_id": order_id, "trade_status": "BTO"})
+                    active_trade.update(order_id=order_id, status='WORKING', details=new_order_details, instrument_position=0)
+                    return jsonify({"success": True, "message": "Order placed.", "order_id": order_id, "trade_status": new_order_details['side']})
                 else:
                     return jsonify({"success": False, "error": response.get('error', 'Failed to place order')}), 500
 
             # If there is an active order, decide whether to replace or cancel/re-place
             else:
+                # This logic can be simplified for now, as the primary goal is the position display.
+                # A full replace/cancel-re-place logic is complex.
+                # For now, we will just cancel the old and place the new.
                 current_details = active_trade['details']
-                is_price_only_change = (
-                    current_details['symbol'] == new_order_details['symbol'] and
-                    current_details['option_type'] == new_order_details['option_type'] and
-                    current_details['expiration_date'] == new_order_details['expiration_date'] and
-                    current_details['strike_price'] == new_order_details['strike_price'] and
-                    current_details['quantity'] == new_order_details['quantity'] and
-                    current_details['side'] == new_order_details['side'] and
-                    current_details['price'] != new_order_details['price']
-                )
+                cancel_response = client.cancel_option_order(account_id=current_details['account_id'], order_id=active_trade['order_id'])
+                if not cancel_response.get('success'):
+                    return jsonify({"success": False, "error": f"Failed to cancel previous order: {cancel_response.get('error')}"}), 500
 
-                if is_price_only_change:
-                    replace_details = new_order_details.copy()
-                    replace_details['order_id'] = active_trade['order_id']
-                    response = client.replace_option_order(**replace_details)
-                    if response.get('success'):
-                        new_order_id = response.get('data', {}).get('new_order_id')
-                        active_trade['order_id'] = new_order_id
-                        active_trade['details'] = new_order_details
-                        return jsonify({"success": True, "message": "Order replaced.", "order_id": new_order_id, "trade_status": "BTO"})
-                    else:
-                        return jsonify({"success": False, "error": response.get('error', 'Failed to replace order')}), 500
+                place_response = client.place_option_order(**new_order_details)
+                if place_response.get('success'):
+                    order_id = place_response.get('data', {}).get('order_id')
+                    active_trade.update(order_id=order_id, status='WORKING', details=new_order_details) # instrument_position is not reset here
+                    return jsonify({"success": True, "message": "Previous order canceled, new order placed.", "order_id": order_id, "trade_status": new_order_details['side']})
                 else:
-                    # Instrument is different, so cancel old and place new
-                    cancel_response = client.cancel_option_order(account_id=current_details['account_id'], order_id=active_trade['order_id'])
-                    if not cancel_response.get('success'):
-                        return jsonify({"success": False, "error": f"Failed to cancel previous order: {cancel_response.get('error')}"}), 500
-
-                    place_response = client.place_option_order(**new_order_details)
-                    if place_response.get('success'):
-                        order_id = place_response.get('data', {}).get('order_id')
-                        active_trade = {'order_id': order_id, 'status': 'WORKING', 'details': new_order_details}
-                        return jsonify({"success": True, "message": "Previous order canceled, new order placed.", "order_id": order_id, "trade_status": "BTO"})
-                    else:
-                        return jsonify({"success": False, "error": f"Canceled previous order but failed to place new one: {place_response.get('error')}"}), 500
+                    return jsonify({"success": False, "error": f"Canceled previous order but failed to place new one: {place_response.get('error')}"}), 500
 
         elif order_action == 'cancel':
             if active_trade.get('order_id'):
                 response = client.cancel_option_order(account_id=active_trade['details']['account_id'], order_id=active_trade['order_id'])
                 if response.get('success'):
-                    active_trade = {"order_id": None, "status": "Idle", "details": {}}
+                    # Reset everything except the instrument position, because we might still hold it.
+                    active_trade.update(order_id=None, status='CANCELED', details={})
                     return jsonify({"success": True, "message": "Order canceled."})
                 else:
                     return jsonify({"success": False, "error": response.get('error', 'Failed to cancel order')}), 500
@@ -233,9 +223,10 @@ def handle_order():
 
 @app.route('/api/order_status', methods=['GET'])
 def get_order_status():
-    """Get the status of the active order."""
+    """Get the status of the active order and update instrument position on fill."""
+    global active_trade
     if not active_trade.get('order_id'):
-        return jsonify({"success": True, "data": {"status": "Idle"}})
+        return jsonify({"success": True, "data": {"status": "Idle", "instrument_position": 0}})
 
     account_hash = active_trade['details'].get('account_id')
     order_id = active_trade.get('order_id')
@@ -245,10 +236,31 @@ def get_order_status():
 
     with SchwabClient() as client:
         order_details_response = client.get_option_order_details(account_id=account_hash, order_id=order_id)
+
         if order_details_response.get('success'):
-            # Update server-side state
-            active_trade['status'] = order_details_response.get('data', {}).get('status')
-            return jsonify({"success": True, "data": order_details_response.get('data', {})})
+            new_status = order_details_response.get('data', {}).get('status')
+
+            # Check if the order was just filled
+            if new_status == 'FILLED' and active_trade['status'] != 'FILLED':
+                instruction = active_trade['details'].get('side', '')
+                quantity = active_trade['details'].get('quantity', 0)
+
+                if 'BUY' in instruction:
+                    active_trade['instrument_position'] += quantity
+                    active_trade['trade_side'] = 'long'
+                elif 'SELL' in instruction:
+                    active_trade['instrument_position'] -= quantity
+                    if active_trade['instrument_position'] == 0:
+                        active_trade['trade_side'] = None # Closed the position
+
+            # Update server-side status
+            active_trade['status'] = new_status
+
+            # Add instrument_position to the response
+            response_data = order_details_response.get('data', {})
+            response_data['instrument_position'] = active_trade['instrument_position']
+
+            return jsonify({"success": True, "data": response_data})
 
     return jsonify({"success": False, "error": f"Could not retrieve status for order {order_id}."}), 404
 

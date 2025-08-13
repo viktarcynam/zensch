@@ -55,13 +55,14 @@
             </div>
         </div>
 
-        <!-- Line 3: Status and Cancel -->
+        <!-- Line 4: Status and Cancel -->
         <div class="control-line">
             <div id="status-display" class="status-display">Initializing...</div>
+            <div id="in-progress-position-display" class="in-progress-position">0</div>
             <button id="cancel-btn" class="control-btn cancel-main-btn" disabled>Cancel</button>
         </div>
     </div>
 
-    <script defer src="{{ url_for('static', filename='main.js') }}?v=3.0"></script>
+    <script defer src="{{ url_for('static', filename='main.js') }}?v=3.1"></script>
 </body>
 </html>

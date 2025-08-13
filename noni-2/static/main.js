@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pbBtn = document.getElementById('pb-btn');
     const psBtn = document.getElementById('ps-btn');
     const statusDisplay = document.getElementById('status-display');
+    const inProgressPositionDisplay = document.getElementById('in-progress-position-display');
     const cancelBtn = document.getElementById('cancel-btn');
 
     // --- State Management ---
@@ -135,6 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const priceInputId = `${optionType.toLowerCase()}${action.toLowerCase()}-price`;
         const priceInput = document.getElementById(priceInputId);
 
+        // Frontend now sends a simpler request, backend determines the full 'side'
         const orderDetails = {
             account_id: accountHash,
             symbol: symbolInput.value.trim().toUpperCase(),
@@ -142,12 +144,13 @@ document.addEventListener('DOMContentLoaded', () => {
             expiration_date: expiryInput.value,
             strike_price: parseFloat(strikeInput.value),
             quantity: 1,
-            side: action === 'B' ? 'BUY_TO_OPEN' : 'SELL_TO_CLOSE',
+            simple_action: action, // 'B' or 'S'
             order_type: 'LIMIT',
             price: parseFloat(priceInput.value)
         };
 
         try {
+            inProgressPositionDisplay.textContent = '0'; // Set to 0 on new order attempt
             const response = await fetch('/api/order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -203,16 +206,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/order_status');
             const data = await response.json();
             if (data.success) {
-                const status = data.data.status;
+                const orderData = data.data;
+                const status = orderData.status;
                 if (!status) return;
+
+                // Update In-Progress Position Display
+                const position = orderData.instrument_position || 0;
+                const putCall = activeOrder.option_type;
+                if (position !== 0) {
+                    inProgressPositionDisplay.textContent = `${position > 0 ? '+' : ''}${position} ${putCall}`;
+                } else {
+                    inProgressPositionDisplay.textContent = '0';
+                }
+
                 const details = activeOrder;
                 statusDisplay.textContent = `${status} ${details.symbol} ${details.strike_price}${details.option_type[0]} @ ${details.price}`;
+
                 if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(status)) {
                     if (statusPollInterval) clearInterval(statusPollInterval);
                     activeOrder = null;
                     if(status === 'FILLED') {
                         statusDisplay.textContent = `FILLED! Ready for next trade.`;
-                        fetchPositions();
+                        fetchPositions(); // Refresh main position display
                     }
                 }
             }
