@@ -1,9 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     const statusDisplay = document.getElementById('status-display');
-    statusDisplay.textContent = 'JS Loaded. Initializing...';
 
-    // --- Element Selectors ---
-    const symbolInput = document.getElementById('symbol-input');
+    try {
+        statusDisplay.textContent = 'JS Loaded. Initializing...';
+
+        // --- Element Selectors ---
+        const symbolInput = document.getElementById('symbol-input');
     const useBtn = document.getElementById('use-btn');
     const positionDisplay = document.getElementById('position-display');
     const strikeInput = document.getElementById('strike-input');
@@ -275,4 +277,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Start the app ---
     init();
+
+    } catch (error) {
+        statusDisplay.textContent = `FATAL ERROR: ${error.message}`;
+    }
 });
