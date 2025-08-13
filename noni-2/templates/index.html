@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>noni-2</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Line 1: Symbol, Position -->
+        <div class="control-line">
+            <input type="text" id="symbol-input" class="symbol-input" placeholder="SYM" maxlength="5">
+            <button id="use-btn" class="control-btn" disabled>Use</button>
+            <div id="position-display" class="position-display"></div>
+        </div>
+
+        <!-- Line 2: Strike, Expiry -->
+        <div class="control-line">
+            <input type="number" id="strike-input" class="strike-input" placeholder="Strike">
+            <input type="text" id="expiry-input" class="expiry-input" placeholder="YYYY-MM-DD">
+        </div>
+
+        <!-- Line 3: Option Quotes -->
+        <div class="control-line" id="quotes-line">
+            <div class="quote-group">
+                <div class="quote-item" data-label="b:"><span id="call-bid">-.--</span></div>
+                <div class="quote-item" data-label="a:"><span id="call-ask">-.--</span></div>
+                <div class="quote-item" data-label="vol:"><span id="call-vol">--</span></div>
+            </div>
+            <div class="quote-group">
+                <div class="quote-item" data-label="b:"><span id="put-bid">-.--</span></div>
+                <div class="quote-item" data-label="a:"><span id="put-ask">-.--</span></div>
+                <div class="quote-item" data-label="vol:"><span id="put-vol">--</span></div>
+            </div>
+        </div>
+
+        <!-- Order Entry -->
+        <div class="control-line" id="order-entry-line">
+            <div class="order-box">
+                <input type="number" step="0.01" id="cb-price" class="order-input">
+                <button id="cb-btn" class="order-btn" disabled>CB</button>
+            </div>
+            <div class="order-box">
+                <input type="number" step="0.01" id="cs-price" class="order-input">
+                <button id="cs-btn" class="order-btn" disabled>CS</button>
+            </div>
+            <div class="order-box">
+                <input type="number" step="0.01" id="pb-price" class="order-input">
+                <button id="pb-btn" class="order-btn" disabled>PB</button>
+            </div>
+            <div class="order-box">
+                <input type="number" step="0.01" id="ps-price" class="order-input">
+                <button id="ps-btn" class="order-btn" disabled>PS</button>
+            </div>
+        </div>
+
+        <!-- Line 4: Status and Cancel -->
+        <div class="control-line">
+            <div id="status-display" class="status-display">Initializing...</div>
+            <div id="in-progress-position-display" class="in-progress-position">0</div>
+            <button id="cancel-btn" class="control-btn cancel-main-btn" disabled>Cancel</button>
+        </div>
+    </div>
+
+    <script defer src="{{ url_for('static', filename='main.js') }}?v=7.1"></script>
+</body>
+</html>

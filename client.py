@@ -39,6 +39,7 @@ class SchwabClient:
         self.port = port or config.server_port
         self.timeout = timeout
         self.socket = None
+        self.last_connection_error = None
     
     def connect(self) -> bool:
         """
@@ -47,6 +48,7 @@ class SchwabClient:
         Returns:
             bool: True if connection successful, False otherwise
         """
+        self.last_connection_error = None
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(self.timeout)
@@ -55,7 +57,9 @@ class SchwabClient:
             return True
             
         except Exception as e:
-            logger.error(f"Failed to connect to server: {str(e)}")
+            error_message = f"Failed to connect to server at {self.host}:{self.port} - {str(e)}"
+            self.last_connection_error = error_message
+            logger.error(error_message)
             return False
     
     def disconnect(self):
@@ -133,9 +137,10 @@ class SchwabClient:
         try:
             if not self.socket:
                 if not self.connect():
+                    error_msg = self.last_connection_error or 'Failed to connect to server'
                     return {
                         'success': False,
-                        'error': 'Failed to connect to server',
+                        'error': error_msg,
                         'timestamp': datetime.now().isoformat()
                     }
             
