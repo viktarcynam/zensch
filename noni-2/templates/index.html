@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>noni-2: The Schwab Web Trader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>noni-2: The Schwab Web Trader</h1>
+
+        <div class="card">
+            <h2>1. Select Account</h2>
+            <button id="get-account-btn">Load Account</button>
+            <p>Account Hash: <strong id="account-hash"></strong></p>
+        </div>
+
+        <div class="card">
+            <h2>2. Get Quote</h2>
+            <input type="text" id="symbol-input" placeholder="Enter stock symbol (e.g., AAPL)">
+            <button id="get-quote-btn">Get Quote & Positions</button>
+            <div id="quote-display"></div>
+            <div id="positions-display"></div>
+        </div>
+
+        <div class="card" id="trade-entry-card" style="display: none;">
+            <h2>3. Place Trade</h2>
+            <form id="trade-form">
+                <div class="form-group">
+                    <label>Strike:</label>
+                    <input type="number" id="strike-input" step="0.5" placeholder="e.g., 150.0">
+                </div>
+                <div class="form-group">
+                    <label>Expiry (YYYY-MM-DD):</label>
+                    <input type="text" id="expiry-input" placeholder="e.g., 2025-12-19">
+                </div>
+                <button type="button" id="get-options-btn">Get Option Prices</button>
+            </form>
+            <div id="options-display"></div>
+             <div id="order-form-container" style="display: none;">
+                <h3>Order Details</h3>
+                <form id="order-form">
+                    <div class="form-group">
+                        <label>Action:</label>
+                        <select id="action-select">
+                            <option value="B">Buy</option>
+                            <option value="S">Sell</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Type:</label>
+                        <select id="type-select">
+                            <option value="C">Call</option>
+                            <option value="P">Put</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Price:</label>
+                        <input type="number" id="price-input" step="0.01" placeholder="e.g., 1.25">
+                    </div>
+                    <button type="button" id="place-order-btn">Place Order</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Active Trades</h2>
+            <div id="active-trades-display">
+                <p>No active trades.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>
