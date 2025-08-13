@@ -453,7 +453,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
             if time.time() < next_poll_time:
                 continue
 
-            next_poll_time = time.time() + 4
+            next_poll_time = time.time() + 2
             if poll_count > 0:
                 print(".", end="", flush=True)
             poll_count += 1
