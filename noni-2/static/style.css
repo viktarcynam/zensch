@@ -17,7 +17,7 @@ body {
 }
 
 .scroller-box {
-    width: 150px;
+    width: 180px; /* Increased width */
     height: 280px;
     background-color: #313335;
     border: 1px solid #555;

@@ -54,8 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 const priceDiv = document.createElement('div');
                 priceDiv.textContent = data.price.toFixed(2);
-                priceScroller.appendChild(priceDiv);
-                priceScroller.scrollTop = priceScroller.scrollHeight;
+                priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
             }
         } catch (error) {
             console.error('Error fetching underlying price:', error);
