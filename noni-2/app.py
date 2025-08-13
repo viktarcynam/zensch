@@ -1,15 +1,14 @@
 from flask import Flask, jsonify, request, render_template
 import sys
 import os
+import uuid
+from datetime import datetime, timedelta
 
 # Add the parent directory to the Python path to import the client
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from client import SchwabClient
 
 app = Flask(__name__)
-
-import uuid
-from datetime import datetime, timedelta
 
 # --- Helper functions from noni-1.py ---
 
@@ -172,19 +171,20 @@ def handle_order():
             new_order_details = data['order_details']
 
             # Backend determines the correct 'side'
-            action = new_order_details.pop('simple_action') # 'BUY' or 'SELL'
+            action = new_order_details.pop('simple_action') # 'B' or 'S'
 
             print(f"--- ORDER DEBUG ---")
             print(f"Received simple_action: {action}")
             print(f"Current trade_side state: {active_trade.get('trade_side')}")
 
-            if action == 'BUY':
+            if action == 'B':
                 new_order_details['side'] = 'BUY_TO_CLOSE' if active_trade.get('trade_side') == 'short' else 'BUY_TO_OPEN'
-            else: # SELL
+            else: # 'S'
                 new_order_details['side'] = 'SELL_TO_CLOSE' if active_trade.get('trade_side') == 'long' else 'SELL_TO_OPEN'
 
             print(f"Determined side: {new_order_details['side']}")
             print(f"-------------------")
+
 
             # If there's no active order, just place it.
             if not active_trade.get('order_id') or active_trade.get('status') not in ['WORKING', 'PENDING_ACTIVATION']:
@@ -201,8 +201,6 @@ def handle_order():
 
             # If there is an active order, decide whether to replace or cancel/re-place
             else:
-                # This logic can be simplified for now, as the primary goal is the position display.
-                # A full replace/cancel-re-place logic is complex.
                 # For now, we will just cancel the old and place the new.
                 current_details = active_trade['details']
                 # --- DRY RUN ---
