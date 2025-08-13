@@ -178,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const priceInputId = `${optionType.toLowerCase()}${action.toLowerCase()}-price`;
+            const priceInputId = `${optionType[0].toLowerCase()}${action.toLowerCase()}-price`;
             const priceInput = document.getElementById(priceInputId);
 
             const orderDetails = {
