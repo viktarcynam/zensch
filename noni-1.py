@@ -681,6 +681,11 @@ def monitor_and_close_workflow(client, account_hash, order_to_monitor):
         return
 
     if status == "FILLED":
+        # If the order that filled was a closing order, the workflow is complete.
+        if "TO_CLOSE" in side:
+            print("\nPosition has been closed. Workflow complete.")
+            return
+
         # Get the current quote for the option
         print("\nFetching current quote for closing order...")
         closing_option_chain_response = client.get_option_chains(
