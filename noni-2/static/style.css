@@ -10,9 +10,30 @@ body {
     min-height: 100vh;
 }
 
+.main-container {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.scroller-box {
+    width: 150px;
+    height: 280px;
+    background-color: #313335;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 10px;
+    overflow-y: auto;
+    font-size: 0.9em;
+}
+
+.scroller-box div {
+    padding: 2px 0;
+}
+
 .container {
     width: 100%;
-    max-width: 700px;
+    max-width: 600px; /* Adjusted width */
     padding: 15px;
     background-color: #3c3f41;
     border: 1px solid #555;
@@ -62,13 +83,13 @@ input:focus {
     border-color: #007bff;
 }
 
-.symbol-input {
-    width: 60px;
-    text-transform: uppercase;
+.strike-input {
+    width: 100px;
 }
 
-.strike-input, .expiry-input {
-    flex-grow: 1;
+input[type="date"].expiry-input {
+    width: 130px;
+    min-width: 130px;
 }
 
 .control-btn {
