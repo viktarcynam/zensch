@@ -1,63 +1,35 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const statusDisplay = document.getElementById('status-display');
-
-    try {
-        statusDisplay.textContent = 'JS Loaded. Initializing...';
-
-        // --- Element Selectors ---
-        const symbolInput = document.getElementById('symbol-input');
+    // --- Element Selectors ---
+    const symbolInput = document.getElementById('symbol-input');
     const useBtn = document.getElementById('use-btn');
     const positionDisplay = document.getElementById('position-display');
     const strikeInput = document.getElementById('strike-input');
     const expiryInput = document.getElementById('expiry-input');
     const getBtn = document.getElementById('get-btn');
-
     const callBidEl = document.getElementById('call-bid');
     const callAskEl = document.getElementById('call-ask');
     const callVolEl = document.getElementById('call-vol');
     const putBidEl = document.getElementById('put-bid');
     const putAskEl = document.getElementById('put-ask');
     const putVolEl = document.getElementById('put-vol');
-
     const cbPriceInput = document.getElementById('cb-price');
     const csPriceInput = document.getElementById('cs-price');
     const pbPriceInput = document.getElementById('pb-price');
     const psPriceInput = document.getElementById('ps-price');
-
     const cbBtn = document.getElementById('cb-btn');
     const csBtn = document.getElementById('cs-btn');
     const pbBtn = document.getElementById('pb-btn');
     const psBtn = document.getElementById('ps-btn');
-
+    const statusDisplay = document.getElementById('status-display');
     const cancelBtn = document.getElementById('cancel-btn');
 
     // --- State Management ---
     let accountHash = null;
     let positionPollInterval = null;
     let statusPollInterval = null;
-    let activeOrder = null; // To hold details of the current order being worked on
+    let activeOrder = null;
 
-    // --- Initialization ---
-    const init = async () => {
-        try {
-            statusDisplay.textContent = 'Fetching account...';
-            const response = await fetch('/api/accounts');
-            statusDisplay.textContent = 'Parsing account response...';
-            const data = await response.json();
-
-            if (data.success) {
-                accountHash = data.account_hash;
-                statusDisplay.textContent = 'Account loaded. Enabling controls...';
-                enableControls();
-                statusDisplay.textContent = 'Idle';
-            } else {
-                statusDisplay.textContent = `Error: ${data.error || 'Could not load account.'}`;
-            }
-        } catch (error) {
-            statusDisplay.textContent = `Catch Error: ${error.message || 'Backend not reachable.'}`;
-        }
-    };
-
+    // --- Function Declarations ---
     const enableControls = () => {
         useBtn.disabled = false;
         getBtn.disabled = false;
@@ -68,34 +40,9 @@ document.addEventListener('DOMContentLoaded', () => {
         psBtn.disabled = false;
     };
 
-    // --- Event Listeners ---
-    symbolInput.addEventListener('input', () => {
-        if (symbolInput.value.length >= 2) { // Fetch defaults when symbol is likely entered
-             fetchAndSetDefaults();
-        }
-    });
-
-    useBtn.addEventListener('click', () => {
-        if (positionPollInterval) clearInterval(positionPollInterval);
-        fetchPositions(); // Fetch immediately
-        positionPollInterval = setInterval(fetchPositions, 15000); // And then every 15 seconds
-    });
-
-    getBtn.addEventListener('click', fetchOptionQuotes);
-
-    cbBtn.addEventListener('click', () => handleOrderPlacement('B', 'C'));
-    csBtn.addEventListener('click', () => handleOrderPlacement('S', 'C'));
-    pbBtn.addEventListener('click', () => handleOrderPlacement('B', 'P'));
-    psBtn.addEventListener('click', () => handleOrderPlacement('S', 'P'));
-
-    cancelBtn.addEventListener('click', handleCancel);
-
-
-    // --- Functions ---
     const fetchAndSetDefaults = async () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         if (!symbol) return;
-
         try {
             const response = await fetch(`/api/defaults/${symbol}`);
             const data = await response.json();
@@ -111,17 +58,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchPositions = async () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         if (!symbol || !accountHash) return;
-
         try {
             const response = await fetch(`/api/positions/${symbol}?account_hash=${accountHash}`);
             const data = await response.json();
             if (data.success && data.data.accounts && data.data.accounts.length > 0) {
                 const positions = data.data.accounts[0].positions;
                 if (positions && positions.length > 0) {
-                    // Create a concise summary of positions
                     const summary = positions.map(p => {
                         const qty = p.longQuantity - p.shortQuantity;
-                        return `${qty > 0 ? '+' : ''}${qty} ${p.instrument.symbol}`;
+                        return `${qty > 0 ? '+' : ''}${Math.round(qty)} ${p.instrument.symbol}`;
                     }).join(', ');
                     positionDisplay.textContent = summary;
                 } else {
@@ -144,14 +89,14 @@ document.addEventListener('DOMContentLoaded', () => {
             statusDisplay.textContent = "Sym, Strike, Exp required.";
             return;
         }
-
         try {
             const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
             const data = await response.json();
-
             if (data.success) {
-                const callData = data.data.callExpDateMap?.[Object.keys(data.data.callExpDateMap)[0]]?.[strike]?.[0];
-                const putData = data.data.putExpDateMap?.[Object.keys(data.data.putExpDateMap)[0]]?.[strike]?.[0];
+                const callMap = data.data.callExpDateMap;
+                const putMap = data.data.putExpDateMap;
+                const callData = callMap?.[Object.keys(callMap)[0]]?.[strike]?.[0];
+                const putData = putMap?.[Object.keys(putMap)[0]]?.[strike]?.[0];
 
                 if (callData) {
                     callBidEl.textContent = callData.bid.toFixed(2);
@@ -182,7 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const priceInput = document.getElementById(`${optionType.toLowerCase()}${action.toLowerCase()}-price`);
+        const priceInputId = `${optionType.toLowerCase()}${action.toLowerCase()}-price`;
+        const priceInput = document.getElementById(priceInputId);
 
         const orderDetails = {
             account_id: accountHash,
@@ -191,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             expiration_date: expiryInput.value,
             strike_price: parseFloat(strikeInput.value),
             quantity: 1,
-            side: action === 'B' ? 'BUY_TO_OPEN' : 'SELL_TO_CLOSE', // Simplified logic
+            side: action === 'B' ? 'BUY_TO_OPEN' : 'SELL_TO_CLOSE', // Simplified logic for now
             order_type: 'LIMIT',
             price: parseFloat(priceInput.value)
         };
@@ -202,11 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'place_or_replace', order_details: orderDetails })
             });
-
             const data = await response.json();
-
             if (data.success) {
-                statusDisplay.textContent = `${data.trade_status} ${orderDetails.symbol} ${orderDetails.strike_price}${orderDetails.option_type} @ ${orderDetails.price}`;
+                statusDisplay.textContent = `${data.trade_status} ${orderDetails.symbol} ${orderDetails.strike_price}${orderDetails.option_type[0]} @ ${orderDetails.price}`;
                 activeOrder = orderDetails;
                 activeOrder.orderId = data.order_id;
                 if (statusPollInterval) clearInterval(statusPollInterval);
@@ -250,23 +194,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (statusPollInterval) clearInterval(statusPollInterval);
             return;
         }
-
         try {
             const response = await fetch('/api/order_status');
             const data = await response.json();
             if (data.success) {
                 const status = data.data.status;
+                if (!status) return;
+
                 const details = activeOrder;
-                statusDisplay.textContent = `${status} ${details.symbol} ${details.strike_price}${details.option_type} @ ${details.price}`;
+                statusDisplay.textContent = `${status} ${details.symbol} ${details.strike_price}${details.option_type[0]} @ ${details.price}`;
 
                 if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(status)) {
                     if (statusPollInterval) clearInterval(statusPollInterval);
-                    // Here you could add logic to automatically place a closing order if filled.
-                    // For now, we just stop polling.
                     activeOrder = null;
                     if(status === 'FILLED') {
                         statusDisplay.textContent = `FILLED! Ready for next trade.`;
-                        fetchPositions(); // Refresh positions on fill
+                        fetchPositions();
                     }
                 }
             }
@@ -275,10 +218,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const init = async () => {
+        try {
+            const response = await fetch('/api/accounts');
+            const data = await response.json();
+            if (data.success) {
+                accountHash = data.account_hash;
+                enableControls();
+                statusDisplay.textContent = 'Idle';
+            } else {
+                statusDisplay.textContent = `Error: ${data.error || 'Could not load account.'}`;
+            }
+        } catch (error) {
+            statusDisplay.textContent = `Error: ${error.message || 'Backend not reachable.'}`;
+        }
+    };
+
+    // --- Event Listeners ---
+    symbolInput.addEventListener('input', () => {
+        if (symbolInput.value.length >= 2) {
+             fetchAndSetDefaults();
+        }
+    });
+    useBtn.addEventListener('click', () => {
+        if (positionPollInterval) clearInterval(positionPollInterval);
+        fetchPositions();
+        positionPollInterval = setInterval(fetchPositions, 15000);
+    });
+    getBtn.addEventListener('click', fetchOptionQuotes);
+    cbBtn.addEventListener('click', () => handleOrderPlacement('B', 'C'));
+    csBtn.addEventListener('click', () => handleOrderPlacement('S', 'C'));
+    pbBtn.addEventListener('click', () => handleOrderPlacement('B', 'P'));
+    psBtn.addEventListener('click', () => handleOrderPlacement('S', 'P'));
+    cancelBtn.addEventListener('click', handleCancel);
+
     // --- Start the app ---
     init();
-
-    } catch (error) {
-        statusDisplay.textContent = `FATAL ERROR: ${error.message}`;
-    }
 });
