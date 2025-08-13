@@ -32,6 +32,21 @@ class SchwabAuthenticator:
         self.client: Optional[schwabdev.Client] = None
         self.allow_tokens_only = allow_tokens_only
         
+    def _handle_notification(self, message: str, importance: int):
+        """
+        Handles notifications from the schwabdev client, such as auth URLs.
+        """
+        log_message = f"Schwabdev Notification (Importance: {importance}): {message}"
+        # Importance 0 is the most critical, usually for user action
+        if importance == 0:
+            logger.warning(log_message)
+            # Print to console in a highly visible way
+            print("\n" + "="*80)
+            print(f"IMPORTANT ACTION REQUIRED: {message}")
+            print("="*80 + "\n")
+        else:
+            logger.info(log_message)
+
         # If tokens-only mode and valid tokens exist, try to get credentials from config
         if allow_tokens_only and config.has_valid_tokens() and (not self.app_key or not self.app_secret):
             try:
@@ -80,7 +95,8 @@ class SchwabAuthenticator:
                 tokens_file=self.tokens_file,
                 timeout=config.timeout,
                 capture_callback=True,  # Use webserver to capture callback
-                use_session=True  # Use session for better performance
+                use_session=True,  # Use session for better performance
+                call_on_notify=self._handle_notification
             )
             
             logger.info("Successfully authenticated with Schwab API")
