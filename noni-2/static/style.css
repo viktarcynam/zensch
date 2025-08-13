@@ -17,8 +17,12 @@ body {
 }
 
 .scroller-box {
-    width: 180px; /* Increased width */
+    width: 180px; /* Default for fills scroller */
     height: 280px;
+}
+
+.price-scroller {
+    width: 120px; /* Narrower for just price */
     background-color: #313335;
     border: 1px solid #555;
     border-radius: 8px;
@@ -151,8 +155,36 @@ input[type="date"].expiry-input {
 }
 
 .order-input {
-    width: 80px;
+    width: 60px; /* Make input narrower */
+    margin: 0;
+    border-radius: 0;
+    -moz-appearance: textfield; /* Hide spinner on Firefox */
+}
+
+/* Hide spinner on Chrome, Safari, Edge, Opera */
+.order-input::-webkit-outer-spin-button,
+.order-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.price-adjust-wrapper {
+    display: flex;
     margin-bottom: 5px;
+}
+
+.price-adjust-btn {
+    width: 30px;
+    background-color: #555;
+    color: #ddd;
+    border: 1px solid #666;
+    cursor: pointer;
+}
+.price-adjust-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+.price-adjust-btn:last-child {
+    border-radius: 0 4px 4px 0;
 }
 
 .order-btn {

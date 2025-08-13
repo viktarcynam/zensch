@@ -287,6 +287,17 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Event Listeners ---
+    document.querySelectorAll('.price-adjust-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            const targetInput = document.getElementById(button.dataset.target);
+            const amount = parseFloat(button.dataset.amount);
+            if (targetInput) {
+                const currentValue = parseFloat(targetInput.value) || 0;
+                targetInput.value = (currentValue + amount).toFixed(2);
+            }
+        });
+    });
+
     symbolInput.addEventListener('change', () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
         if (underlyingPricePollInterval) clearInterval(underlyingPricePollInterval);
@@ -295,6 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     strikeInput.addEventListener('change', handleInputChange);
     expiryInput.addEventListener('change', handleInputChange);
+
     useBtn.addEventListener('click', () => {
         if (positionPollInterval) clearInterval(positionPollInterval);
         fetchPositions();

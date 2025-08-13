@@ -41,19 +41,35 @@
             <!-- Order Entry -->
             <div class="control-line" id="order-entry-line">
                 <div class="order-box">
-                    <input type="number" step="0.01" id="cb-price" class="order-input">
+                    <div class="price-adjust-wrapper">
+                        <button class="price-adjust-btn" data-target="cb-price" data-amount="-0.01">-</button>
+                        <input type="number" step="0.01" id="cb-price" class="order-input">
+                        <button class="price-adjust-btn" data-target="cb-price" data-amount="0.01">+</button>
+                    </div>
                     <button id="cb-btn" class="order-btn" disabled>CB</button>
                 </div>
                 <div class="order-box">
-                    <input type="number" step="0.01" id="cs-price" class="order-input">
+                    <div class="price-adjust-wrapper">
+                        <button class="price-adjust-btn" data-target="cs-price" data-amount="-0.01">-</button>
+                        <input type="number" step="0.01" id="cs-price" class="order-input">
+                        <button class="price-adjust-btn" data-target="cs-price" data-amount="0.01">+</button>
+                    </div>
                     <button id="cs-btn" class="order-btn" disabled>CS</button>
                 </div>
                 <div class="order-box">
-                    <input type="number" step="0.01" id="pb-price" class="order-input">
+                    <div class="price-adjust-wrapper">
+                        <button class="price-adjust-btn" data-target="pb-price" data-amount="-0.01">-</button>
+                        <input type="number" step="0.01" id="pb-price" class="order-input">
+                        <button class="price-adjust-btn" data-target="pb-price" data-amount="0.01">+</button>
+                    </div>
                     <button id="pb-btn" class="order-btn" disabled>PB</button>
                 </div>
                 <div class="order-box">
-                    <input type="number" step="0.01" id="ps-price" class="order-input">
+                    <div class="price-adjust-wrapper">
+                        <button class="price-adjust-btn" data-target="ps-price" data-amount="-0.01">-</button>
+                        <input type="number" step="0.01" id="ps-price" class="order-input">
+                        <button class="price-adjust-btn" data-target="ps-price" data-amount="0.01">+</button>
+                    </div>
                     <button id="ps-btn" class="order-btn" disabled>PS</button>
                 </div>
             </div>
@@ -69,6 +85,6 @@
         <div id="fills-scroller" class="scroller-box fills-scroller"></div>
     </div>
 
-    <script defer src="{{ url_for('static', filename='main.js') }}?v=8.1"></script>
+    <script defer src="{{ url_for('static', filename='main.js') }}?v=8.2"></script>
 </body>
 </html>
