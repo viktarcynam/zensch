@@ -62,8 +62,6 @@ def parse_option_position_details(position: dict) -> dict or None:
 
 
 # --- State Management ---
-# The only state we need to track now is the active order itself.
-# The instrument position will be polled directly.
 active_trade = {
     "order_id": None,
     "status": "Idle",
@@ -160,20 +158,16 @@ def get_options(symbol, strike, expiry):
 
 @app.route('/api/instrument_position', methods=['GET'])
 def get_instrument_position():
-    """
-    Gets the position quantity for a single, specific instrument.
-    """
     account_hash = request.args.get('account_hash')
     symbol = request.args.get('symbol')
     strike = float(request.args.get('strike'))
     expiry = request.args.get('expiry')
-    option_type = request.args.get('option_type') # CALL or PUT
+    option_type = request.args.get('option_type')
 
     if not all([account_hash, symbol, strike, expiry, option_type]):
         return jsonify({"success": False, "error": "Missing required parameters for instrument position."}), 400
 
     with SchwabClient() as client:
-        # We get all positions for the underlying symbol, then filter for the specific option
         positions_response = client.get_positions_by_symbol(symbol=symbol.upper(), account_hash=account_hash)
         if positions_response.get('success') and positions_response.get('data'):
             accounts = positions_response.get('data', {}).get('accounts', [])
@@ -181,15 +175,11 @@ def get_instrument_position():
                 for pos in acc.get('positions', []):
                     details = parse_option_position_details(pos)
                     if details:
-                        # Check if this position matches the requested instrument
                         if (details['put_call'] == option_type and
                             abs(details['strike'] - strike) < 0.001 and
                             details['expiry'] == expiry):
                             return jsonify({"success": True, "quantity": details['quantity']})
-
-            # If we loop through everything and don't find it, the position is 0
             return jsonify({"success": True, "quantity": 0})
-
     return jsonify({"success": False, "error": f"Could not retrieve positions for {symbol}."}), 500
 
 
@@ -204,20 +194,30 @@ def handle_order():
         if order_action == 'place_or_replace':
             new_order_details = data['order_details']
 
-            # Get all positions to determine side
-            positions_response = client.get_positions(account_hash=new_order_details['account_id'])
-            current_positions = positions_response.get('data', {}).get('accounts', [])
+            # --- START: Correct Side Determination Logic ---
+            # 1. Get the current quantity of the specific instrument
+            current_quantity = 0
+            pos_response = client.get_positions_by_symbol(symbol=new_order_details['symbol'], account_hash=new_order_details['account_id'])
+            if pos_response.get('success') and pos_response.get('data'):
+                accounts = pos_response.get('data', {}).get('accounts', [])
+                for acc in accounts:
+                    for pos in acc.get('positions', []):
+                        details = parse_option_position_details(pos)
+                        if details:
+                            if (details['put_call'] == new_order_details['option_type'] and
+                                abs(details['strike'] - new_order_details['strike_price']) < 0.001 and
+                                details['expiry'] == new_order_details['expiration_date']):
+                                current_quantity = details['quantity']
+                                break
+                    if current_quantity != 0: break
 
+            # 2. Determine side based on action and current quantity
             action = new_order_details.pop('simple_action')
-
-            # This is a simplified logic. A real app would need to check the specific instrument.
-            # For now, we assume any position means we are 'long'.
-            is_long = any(acc.get('positions') for acc in current_positions)
-
             if action == 'B':
-                new_order_details['side'] = 'BUY_TO_OPEN' # Simplified
+                new_order_details['side'] = 'BUY_TO_CLOSE' if current_quantity < 0 else 'BUY_TO_OPEN'
             else: # 'S'
-                new_order_details['side'] = 'SELL_TO_CLOSE' if is_long else 'SELL_TO_OPEN'
+                new_order_details['side'] = 'SELL_TO_CLOSE' if current_quantity > 0 else 'SELL_TO_OPEN'
+            # --- END: Correct Side Determination Logic ---
 
             if not active_trade.get('order_id') or active_trade.get('status') not in ['WORKING', 'PENDING_ACTIVATION']:
                 response = client.place_option_order(**new_order_details)
