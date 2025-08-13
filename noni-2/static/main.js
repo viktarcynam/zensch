@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const expiry = expiryInput.value;
         if (symbol && strike && expiry) {
             fetchQuoteAndInstrumentPosition();
-            quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 5000);
+            quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000); // And then poll
         }
     };
 
@@ -278,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     useBtn.addEventListener('click', () => {
         if (positionPollInterval) clearInterval(positionPollInterval);
         fetchPositions();
-        positionPollInterval = setInterval(fetchPositions, 15000);
+        positionPollInterval = setInterval(fetchPositions, 10000);
     });
     cbBtn.addEventListener('click', createOrderPlacementHandler('B', 'CALL'));
     csBtn.addEventListener('click', createOrderPlacementHandler('S', 'CALL'));
