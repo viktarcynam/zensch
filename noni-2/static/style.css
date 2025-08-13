@@ -79,12 +79,20 @@ input:focus {
     font-size: 1.1em;
     font-weight: bold;
     justify-content: center;
-    gap: 30px;
+    gap: 50px; /* Increased gap */
 }
 
 .quote-group {
     display: flex;
     gap: 15px;
+}
+
+.quote-item[data-label]::before {
+    content: attr(data-label);
+    font-weight: normal;
+    font-size: 0.8em;
+    color: #888;
+    margin-right: 5px;
 }
 
 .quote-item {

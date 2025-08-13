@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const positionDisplay = document.getElementById('position-display');
     const strikeInput = document.getElementById('strike-input');
     const expiryInput = document.getElementById('expiry-input');
-    const getBtn = document.getElementById('get-btn');
     const callBidEl = document.getElementById('call-bid');
     const callAskEl = document.getElementById('call-ask');
     const callVolEl = document.getElementById('call-vol');
@@ -27,12 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let accountHash = null;
     let positionPollInterval = null;
     let statusPollInterval = null;
+    let quotePollInterval = null;
     let activeOrder = null;
 
     // --- Function Declarations ---
     const enableControls = () => {
         useBtn.disabled = false;
-        getBtn.disabled = false;
         cancelBtn.disabled = false;
         cbBtn.disabled = false;
         csBtn.disabled = false;
@@ -49,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 strikeInput.value = data.strike;
                 expiryInput.value = data.expiry;
+                handleInputChange(); // Trigger quote refresh check
             }
         } catch (error) {
             console.error('Error fetching defaults:', error);
@@ -77,8 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
         if (!symbol || !strike || !expiry) {
-            statusDisplay.textContent = "Sym, Strike, Exp required.";
-            return;
+            return; // Silently return if fields are not ready
         }
         try {
             const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
@@ -106,11 +105,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     psPriceInput.value = (putData.ask - 0.01).toFixed(2);
                 }
             } else {
-                statusDisplay.textContent = "Error fetching options.";
+                // Don't show error for polling, just log it
+                console.error("Error fetching options.");
             }
         } catch (error) {
             console.error('Error fetching options:', error);
-            statusDisplay.textContent = "API Error.";
+        }
+    };
+
+    const handleInputChange = () => {
+        if (quotePollInterval) clearInterval(quotePollInterval);
+
+        const symbol = symbolInput.value.trim().toUpperCase();
+        const strike = strikeInput.value;
+        const expiry = expiryInput.value;
+
+        if (symbol && strike && expiry) {
+            fetchOptionQuotes(); // Fetch immediately
+            quotePollInterval = setInterval(fetchOptionQuotes, 5000); // And then poll
         }
     };
 
@@ -130,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
             expiration_date: expiryInput.value,
             strike_price: parseFloat(strikeInput.value),
             quantity: 1,
-            side: action === 'B' ? 'BUY_TO_OPEN' : 'SELL_TO_CLOSE', // Simplified logic for now
+            side: action === 'B' ? 'BUY_TO_OPEN' : 'SELL_TO_CLOSE',
             order_type: 'LIMIT',
             price: parseFloat(priceInput.value)
         };
@@ -193,10 +205,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 const status = data.data.status;
                 if (!status) return;
-
                 const details = activeOrder;
                 statusDisplay.textContent = `${status} ${details.symbol} ${details.strike_price}${details.option_type[0]} @ ${details.price}`;
-
                 if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(status)) {
                     if (statusPollInterval) clearInterval(statusPollInterval);
                     activeOrder = null;
@@ -228,17 +238,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Event Listeners ---
-    symbolInput.addEventListener('input', () => {
-        if (symbolInput.value.length >= 2) {
-             fetchAndSetDefaults();
-        }
+    symbolInput.addEventListener('change', () => {
+        if (quotePollInterval) clearInterval(quotePollInterval);
+        fetchAndSetDefaults();
     });
+    strikeInput.addEventListener('change', handleInputChange);
+    expiryInput.addEventListener('change', handleInputChange);
+
     useBtn.addEventListener('click', () => {
         if (positionPollInterval) clearInterval(positionPollInterval);
         fetchPositions();
         positionPollInterval = setInterval(fetchPositions, 15000);
     });
-    getBtn.addEventListener('click', fetchOptionQuotes);
     cbBtn.addEventListener('click', () => handleOrderPlacement('B', 'C'));
     csBtn.addEventListener('click', () => handleOrderPlacement('S', 'C'));
     pbBtn.addEventListener('click', () => handleOrderPlacement('B', 'P'));

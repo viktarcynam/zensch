@@ -8,27 +8,30 @@
 </head>
 <body>
     <div class="container">
-        <!-- Line 1: Symbol, Position, Strike, Expiry -->
+        <!-- Line 1: Symbol, Position -->
         <div class="control-line">
             <input type="text" id="symbol-input" class="symbol-input" placeholder="SYM" maxlength="5">
             <button id="use-btn" class="control-btn" disabled>Use</button>
             <div id="position-display" class="position-display"></div>
-            <input type="number" id="strike-input" class="strike-input" placeholder="Strike">
-            <input type="text" id="expiry-input" class="expiry-input" placeholder="YYYY-MM-DD">
-            <button id="get-btn" class="control-btn" disabled>Get</button>
         </div>
 
-        <!-- Line 2: Option Quotes -->
+        <!-- Line 2: Strike, Expiry -->
+        <div class="control-line">
+            <input type="number" id="strike-input" class="strike-input" placeholder="Strike">
+            <input type="text" id="expiry-input" class="expiry-input" placeholder="YYYY-MM-DD">
+        </div>
+
+        <!-- Line 3: Option Quotes -->
         <div class="control-line" id="quotes-line">
             <div class="quote-group">
-                <div class="quote-item"><span id="call-bid">-.--</span></div>
-                <div class="quote-item"><span id="call-ask">-.--</span></div>
-                <div class="quote-item"><span id="call-vol">--</span></div>
+                <div class="quote-item" data-label="b:"><span id="call-bid">-.--</span></div>
+                <div class="quote-item" data-label="a:"><span id="call-ask">-.--</span></div>
+                <div class="quote-item" data-label="vol:"><span id="call-vol">--</span></div>
             </div>
             <div class="quote-group">
-                <div class="quote-item"><span id="put-bid">-.--</span></div>
-                <div class="quote-item"><span id="put-ask">-.--</span></div>
-                <div class="quote-item"><span id="put-vol">--</span></div>
+                <div class="quote-item" data-label="b:"><span id="put-bid">-.--</span></div>
+                <div class="quote-item" data-label="a:"><span id="put-ask">-.--</span></div>
+                <div class="quote-item" data-label="vol:"><span id="put-vol">--</span></div>
             </div>
         </div>
 
@@ -59,6 +62,6 @@
         </div>
     </div>
 
-    <script defer src="{{ url_for('static', filename='main.js') }}?v=2.2"></script>
+    <script defer src="{{ url_for('static', filename='main.js') }}?v=3.0"></script>
 </body>
 </html>
