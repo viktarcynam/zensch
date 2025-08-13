@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let statusPollInterval = null;
     let quotePollInterval = null;
     let activeOrder = null;
+    let isOrderActive = false;
 
     // --- Function Declarations ---
     const enableControls = () => {
@@ -95,15 +96,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     callBidEl.textContent = callData.bid.toFixed(2);
                     callAskEl.textContent = callData.ask.toFixed(2);
                     callVolEl.textContent = callData.totalVolume;
-                    cbPriceInput.value = (callData.bid + 0.01).toFixed(2);
-                    csPriceInput.value = (callData.ask - 0.01).toFixed(2);
+                    if (!isOrderActive) {
+                        cbPriceInput.value = (callData.bid + 0.01).toFixed(2);
+                        csPriceInput.value = (callData.ask - 0.01).toFixed(2);
+                    }
                 }
                 if (putData) {
                     putBidEl.textContent = putData.bid.toFixed(2);
                     putAskEl.textContent = putData.ask.toFixed(2);
                     putVolEl.textContent = putData.totalVolume;
-                    pbPriceInput.value = (putData.bid + 0.01).toFixed(2);
-                    psPriceInput.value = (putData.ask - 0.01).toFixed(2);
+                    if (!isOrderActive) {
+                        pbPriceInput.value = (putData.bid + 0.01).toFixed(2);
+                        psPriceInput.value = (putData.ask - 0.01).toFixed(2);
+                    }
                 }
             } else {
                 // Don't show error for polling, just log it
@@ -158,9 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const data = await response.json();
                 if (data.success) {
-                    statusDisplay.textContent = `${data.trade_status} ${orderDetails.symbol} ${orderDetails.strike_price}${orderDetails.option_type[0]} @ ${orderDetails.price}`;
-                    activeOrder = orderDetails;
-                    activeOrder.orderId = data.order_id;
+                isOrderActive = true;
+                activeOrder = { ...orderDetails, side: data.trade_status, orderId: data.order_id };
+                statusDisplay.textContent = `${activeOrder.side} ${activeOrder.symbol} ${activeOrder.strike_price}${activeOrder.option_type[0]} @ ${activeOrder.price}`;
                     if (statusPollInterval) clearInterval(statusPollInterval);
                     statusPollInterval = setInterval(pollOrderStatus, 4000);
                 } else {
@@ -189,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusDisplay.textContent = 'Order Canceled. Status: Idle';
                 if (statusPollInterval) clearInterval(statusPollInterval);
                 activeOrder = null;
+                isOrderActive = false;
             } else {
                  statusDisplay.textContent = `Cancel Error: ${data.error}`;
             }
@@ -221,11 +227,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const details = activeOrder;
-                statusDisplay.textContent = `${status} ${details.symbol} ${details.strike_price}${details.option_type[0]} @ ${details.price}`;
+                statusDisplay.textContent = `${status} ${details.side} ${details.symbol} ${details.strike_price}${details.option_type[0]} @ ${details.price}`;
 
                 if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(status)) {
                     if (statusPollInterval) clearInterval(statusPollInterval);
                     activeOrder = null;
+                    isOrderActive = false;
                     if(status === 'FILLED') {
                         statusDisplay.textContent = `FILLED! Ready for next trade.`;
                         fetchPositions(); // Refresh main position display
