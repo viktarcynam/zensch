@@ -241,7 +241,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
     old_settings = termios.tcgetattr(sys.stdin)
     try:
         tty.setcbreak(sys.stdin.fileno())
-        print("\nMonitoring order status... Press 'a' to adjust price, 'q' to cancel.", end="", flush=True)
+        print("\nMonitoring order status... Press 'A' to adjust price, 'Q' to cancel.", end="", flush=True)
 
         current_order_id = order_to_monitor['orderId']
         order_summary = (f"{order_to_monitor['instruction'].replace('_', ' ')} {int(order_to_monitor['quantity'])} "
@@ -257,7 +257,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
 
             if rlist:
                 char = sys.stdin.read(1) # Case-sensitive
-                if char == 'a':
+                if char == 'A':
                     # Restore terminal for standard input
                     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 
