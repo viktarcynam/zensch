@@ -40,12 +40,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.success) {
                 accountHash = data.account_hash;
+                enableControls();
+                statusDisplay.textContent = 'Idle';
             } else {
                 statusDisplay.textContent = 'Error: Could not load account.';
             }
         } catch (error) {
             statusDisplay.textContent = 'Error: Backend not reachable.';
         }
+    };
+
+    const enableControls = () => {
+        useBtn.disabled = false;
+        getBtn.disabled = false;
+        cancelBtn.disabled = false;
+        cbBtn.disabled = false;
+        csBtn.disabled = false;
+        pbBtn.disabled = false;
+        psBtn.disabled = false;
     };
 
     // --- Event Listeners ---

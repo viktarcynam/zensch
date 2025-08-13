@@ -11,11 +11,11 @@
         <!-- Line 1: Symbol, Position, Strike, Expiry -->
         <div class="control-line">
             <input type="text" id="symbol-input" class="symbol-input" placeholder="SYM" maxlength="5">
-            <button id="use-btn" class="control-btn">Use</button>
+            <button id="use-btn" class="control-btn" disabled>Use</button>
             <div id="position-display" class="position-display"></div>
             <input type="number" id="strike-input" class="strike-input" placeholder="Strike">
             <input type="text" id="expiry-input" class="expiry-input" placeholder="YYYY-MM-DD">
-            <button id="get-btn" class="control-btn">Get</button>
+            <button id="get-btn" class="control-btn" disabled>Get</button>
         </div>
 
         <!-- Line 2: Option Quotes -->
@@ -36,26 +36,26 @@
         <div class="control-line" id="order-entry-line">
             <div class="order-box">
                 <input type="number" step="0.01" id="cb-price" class="order-input">
-                <button id="cb-btn" class="order-btn">CB</button>
+                <button id="cb-btn" class="order-btn" disabled>CB</button>
             </div>
             <div class="order-box">
                 <input type="number" step="0.01" id="cs-price" class="order-input">
-                <button id="cs-btn" class="order-btn">CS</button>
+                <button id="cs-btn" class="order-btn" disabled>CS</button>
             </div>
             <div class="order-box">
                 <input type="number" step="0.01" id="pb-price" class="order-input">
-                <button id="pb-btn" class="order-btn">PB</button>
+                <button id="pb-btn" class="order-btn" disabled>PB</button>
             </div>
             <div class="order-box">
                 <input type="number" step="0.01" id="ps-price" class="order-input">
-                <button id="ps-btn" class="order-btn">PS</button>
+                <button id="ps-btn" class="order-btn" disabled>PS</button>
             </div>
         </div>
 
         <!-- Line 3: Status and Cancel -->
         <div class="control-line">
-            <div id="status-display" class="status-display">Idle</div>
-            <button id="cancel-btn" class="control-btn cancel-main-btn">Cancel</button>
+            <div id="status-display" class="status-display">Initializing...</div>
+            <button id="cancel-btn" class="control-btn cancel-main-btn" disabled>Cancel</button>
         </div>
     </div>
 
