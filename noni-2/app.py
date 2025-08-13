@@ -183,7 +183,12 @@ def handle_order():
                 response = client.place_option_order(**new_order_details)
                 if response.get('success'):
                     order_id = response.get('data', {}).get('order_id')
-                    active_trade.update(order_id=order_id, status='WORKING', details=new_order_details, instrument_position=0)
+                    # The instrument_position should only be reset when a new opening order is placed,
+                    # which is determined by the trade_side being None.
+                    if active_trade.get('trade_side') is None:
+                        active_trade.update(order_id=order_id, status='WORKING', details=new_order_details, instrument_position=0)
+                    else:
+                        active_trade.update(order_id=order_id, status='WORKING', details=new_order_details)
                     return jsonify({"success": True, "message": "Order placed.", "order_id": order_id, "trade_status": new_order_details['side']})
                 else:
                     return jsonify({"success": False, "error": response.get('error', 'Failed to place order')}), 500
@@ -198,6 +203,7 @@ def handle_order():
                 place_response = client.place_option_order(**new_order_details)
                 if place_response.get('success'):
                     order_id = place_response.get('data', {}).get('order_id')
+                    # Do not reset instrument_position here, as we are replacing an order for an existing position.
                     active_trade.update(order_id=order_id, status='WORKING', details=new_order_details)
                     return jsonify({"success": True, "message": "Previous order canceled, new order placed.", "order_id": order_id, "trade_status": new_order_details['side']})
                 else:
