@@ -319,9 +319,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 price: parseFloat(priceInput.value)
             };
 
+
             placeOrder(orderDetails);
         });
     });
+
 
     cancelBtn.addEventListener('click', handleCancel);
 
