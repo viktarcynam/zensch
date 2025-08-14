@@ -178,20 +178,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const placeOrder = async (orderDetails) => {
         try {
+            // The new /api/order endpoint is only for placing orders.
             const response = await fetch('/api/order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'place', order_details: orderDetails })
+                body: JSON.stringify({ order_details: orderDetails })
             });
             const data = await response.json();
-            if (data.success) {
+            if (data.success && data.order_id) {
                 isOrderActive = true;
                 activeOrder = { ...orderDetails, orderId: data.order_id };
                 setStatus(`Placed ${activeOrder.side} ${activeOrder.symbol}`);
                 if (statusPollInterval) clearInterval(statusPollInterval);
                 statusPollInterval = setInterval(pollOrderStatus, 2000);
             } else {
-                setStatus(`Error: ${data.error}`, true);
+                setStatus(`Error: ${data.error || 'Unknown placement error'}`, true);
             }
         } catch (error) {
             setStatus(`API Error placing order: ${error.message}`, true);
@@ -201,10 +202,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleCancel = async () => {
         if (!activeOrder || !accountHash) return;
         try {
-            const response = await fetch('/api/order', {
+            // Call the new dedicated cancel endpoint
+            const response = await fetch('/api/cancel_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'cancel' })
+                body: JSON.stringify({
+                    account_id: activeOrder.account_id,
+                    order_id: activeOrder.orderId
+                })
             });
             const data = await response.json();
             if (data.success) {
@@ -223,7 +228,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pollOrderStatus = async () => {
         if (!activeOrder) { if (statusPollInterval) clearInterval(statusPollInterval); return; }
         try {
-            const response = await fetch('/api/order_status');
+            // Poll the new order-specific status endpoint
+            const response = await fetch(`/api/order_status/${activeOrder.orderId}`);
             const data = await response.json();
             if (data.success) {
                 const orderData = data.data;
@@ -272,13 +278,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Heartbeat poller for state synchronization
                 setInterval(async () => {
-                    const symbol = symbolInput.value.trim().toUpperCase();
-                    const strike = strikeInput.value;
-                    const expiry = expiryInput.value;
-                    if (isOrderActive && accountHash && symbol && strike && expiry) {
+                    if (isOrderActive && activeOrder && activeOrder.orderId) {
                         try {
-                            const res = await fetch(`/api/has_active_orders?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
+                            // Use the new order-specific endpoint for the heartbeat
+                            const res = await fetch(`/api/has_active_orders?order_id=${activeOrder.orderId}`);
                             const syncData = await res.json();
+                            // If the backend says it's no longer tracking the order, reset the UI
                             if (syncData.success && !syncData.has_active) {
                                 setStatus('Order cleared externally. Resetting.', true);
                                 if (statusPollInterval) clearInterval(statusPollInterval);
