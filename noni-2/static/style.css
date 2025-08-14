@@ -121,6 +121,16 @@ input[type="date"].expiry-input {
     width: 60px;
     text-align: center;
 }
+
+.instrument-position {
+    color: #ccc;
+    padding: 0 5px;
+}
+
+.instrument-position.has-pos {
+    color: #ffc107; /* A gold/yellow color */
+    font-weight: bold;
+}
 .quote-item[data-label]::before {
     content: attr(data-label);
     font-weight: normal;

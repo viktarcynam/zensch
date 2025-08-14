@@ -30,11 +30,13 @@
                     <div class="quote-item" data-label="b:"><span id="call-bid">-.--</span></div>
                     <div class="quote-item" data-label="a:"><span id="call-ask">-.--</span></div>
                     <div class="quote-item" data-label="vol:"><span id="call-vol">--</span></div>
+                    <div id="call-position-display" class="instrument-position">0C</div>
                 </div>
                 <div class="quote-group">
                     <div class="quote-item" data-label="b:"><span id="put-bid">-.--</span></div>
                     <div class="quote-item" data-label="a:"><span id="put-ask">-.--</span></div>
                     <div class="quote-item" data-label="vol:"><span id="put-vol">--</span></div>
+                    <div id="put-position-display" class="instrument-position">0P</div>
                 </div>
             </div>
 
@@ -77,7 +79,6 @@
             <!-- Line 4: Status and Cancel -->
             <div class="control-line">
                 <div id="status-display" class="status-display">Initializing...</div>
-                <div id="in-progress-position-display" class="in-progress-position">0</div>
                 <button id="cancel-btn" class="control-btn cancel-main-btn" disabled>Cancel</button>
             </div>
         </div>
