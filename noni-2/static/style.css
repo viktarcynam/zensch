@@ -195,10 +195,9 @@ input[type="date"].expiry-input {
     padding: 8px;
     border-radius: 4px;
     text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 0.9em;
+    white-space: normal; /* Allow text to wrap */
+    word-break: break-all; /* Break long words/errors */
+    min-height: 18px; /* Maintain a minimum height */
 }
 .in-progress-position {
     width: 100px;

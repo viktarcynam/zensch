@@ -329,11 +329,9 @@ def poll_order_status(client, account_hash, order_to_monitor):
                                 print(f"Invalid price for sell order. Price ({format_price(new_price)}) cannot be lower than bid ({format_price(market_bid)}).")
                                 continue
 
-
                         # Per API rules, the instruction ('side') cannot be changed during a replacement.
                         # We must use the original instruction from the order being monitored.
                         print(f"New price {format_price(new_price)} is valid. Replacing order with original instruction '{order_to_monitor['instruction']}'...")
-
 
                         replace_response = client.replace_option_order(
                             account_id=account_hash,
@@ -775,7 +773,6 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
         accounts = positions_response.get('data', {}).get('accounts', [])
         for acc in accounts:
             for pos in acc.get('positions', []):
-
                 pos_instrument = pos.get('instrument', {})
                 if pos_instrument.get('assetType') == 'OPTION':
                     # Parse symbols from both sources and compare components
@@ -788,7 +785,6 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
                        abs(pos_details['strike'] - target_details['strike']) < 0.001:
                         current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
                         break
-
             if current_quantity != 0:
                 break
 
@@ -1021,32 +1017,16 @@ def noni_1_main():
                         existing_order_id = existing_order.get('orderId')
                         print(f"Replacing order {existing_order_id}...")
 
-                        # Determine side
-                        current_quantity = 0
-                        if positions_response.get('success') and positions_response.get('data'):
-                            accounts = positions_response.get('data', {}).get('accounts', [])
-                            for acc in accounts:
-                                for pos in acc.get('positions', []):
-                                    pos_instrument = pos.get('instrument', {})
-                                    if pos_instrument.get('assetType') == 'OPTION':
-                                        # Parse symbols from both sources and compare components
-                                        pos_details = parse_option_symbol(pos_instrument.get('symbol'))
-                                        target_details = parse_option_symbol(target_option_data.get('symbol'))
-                                        if pos_details and target_details and \
-                                           pos_details['underlying'].upper() == target_details['underlying'].upper() and \
-                                           pos_details['expiry_date'] == target_details['expiry_date'] and \
-                                           pos_details['put_call'] == target_details['put_call'] and \
-                                           abs(pos_details['strike'] - target_details['strike']) < 0.001:
-                                            current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
-                                            break
-                                if current_quantity != 0:
-                                    break
-
-                        side = ""
-                        if action == 'B':
-                            side = "BUY_TO_CLOSE" if current_quantity < 0 else "BUY_TO_OPEN"
-                        else:  # 'S'
-                            side = "SELL_TO_CLOSE" if current_quantity > 0 else "SELL_TO_OPEN"
+                        # Per API rules, the instruction ('side') cannot be changed during a replacement.
+                        # We must use the original instruction from the order being replaced.
+                        # The 'side' is determined by the 'instruction' in the first leg of the order.
+                        try:
+                            side = existing_order['orderLegCollection'][0]['instruction']
+                            print(f"Using original instruction from existing order: '{side}'")
+                        except (IndexError, KeyError) as e:
+                            print(f"Error: Could not determine original instruction from existing order: {e}")
+                            print("Aborting replacement.")
+                            continue # Go back to the main menu
 
                         replace_response = client.replace_option_order(
                             account_id=account_hash,
@@ -1056,7 +1036,7 @@ def noni_1_main():
                             expiration_date=expiry_date,
                             strike_price=strike_price,
                             quantity=1,
-                            side=side,
+                            side=side, # Use the original, unchanged instruction
                             order_type="LIMIT",
                             price=price
                         )

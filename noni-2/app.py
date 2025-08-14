@@ -252,5 +252,41 @@ def find_replacement_order_api():
             return jsonify({"success": True, "replacement_order": replacement})
     return jsonify({"success": False, "error": "Not found"}), 404
 
+@app.route('/api/log_error', methods=['POST'])
+def log_error():
+    data = request.get_json()
+    if data and 'message' in data:
+        app.logger.error(f"Frontend Error: {data['message']}")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Invalid log message"}), 400
+
+@app.route('/api/has_active_orders', methods=['GET'])
+def has_active_orders():
+    account_hash = request.args.get('account_hash')
+    symbol = request.args.get('symbol')
+    strike = float(request.args.get('strike'))
+    expiry = request.args.get('expiry')
+
+    if not all([account_hash, symbol, strike, expiry]):
+        return jsonify({"success": False, "error": "Missing required parameters for active order check."}), 400
+
+    with SchwabClient() as client:
+        orders_response = client.get_option_orders(account_id=account_hash, status='WORKING')
+        if orders_response.get('success'):
+            for order in orders_response.get('data', []):
+                for leg in order.get('orderLegCollection', []):
+                    instrument = leg.get('instrument', {})
+                    if instrument.get('assetType') == 'OPTION':
+                        details = parse_option_symbol(instrument.get('symbol'))
+                        if details and \
+                           details['underlying'].upper() == symbol.upper() and \
+                           abs(details['strike'] - strike) < 0.001 and \
+                           details['expiry_date'] == expiry:
+                            return jsonify({"success": True, "has_active": True})
+            # If we finish the loop without finding a match for the specific instrument
+            return jsonify({"success": True, "has_active": False})
+
+    return jsonify({"success": False, "error": "Failed to retrieve orders."}), 500
+
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
