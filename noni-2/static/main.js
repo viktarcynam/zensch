@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const fetchQuoteAndInstrumentPosition = async (forceUpdate = false) => {
+    const fetchQuoteAndInstrumentPosition = async () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     callBidEl.textContent = callData.bid.toFixed(2);
                     callAskEl.textContent = callData.ask.toFixed(2);
                     callVolEl.textContent = callData.totalVolume;
-                    if (!isOrderActive || forceUpdate) {
+                    if (!isOrderActive) {
                         cbPriceInput.value = (callData.bid + 0.01).toFixed(2);
                         csPriceInput.value = (callData.ask - 0.01).toFixed(2);
                     }
@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     putBidEl.textContent = putData.bid.toFixed(2);
                     putAskEl.textContent = putData.ask.toFixed(2);
                     putVolEl.textContent = putData.totalVolume;
-                    if (!isOrderActive || forceUpdate) {
+                    if (!isOrderActive) {
                         pbPriceInput.value = (putData.bid + 0.01).toFixed(2);
                         psPriceInput.value = (putData.ask - 0.01).toFixed(2);
                     }
@@ -261,42 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         fetchPositions();
                         fetchRecentFills(); // Refresh fills on a fill
                     }
-                } else if (status === 'REPLACED') {
-                    statusDisplay.textContent = 'Order REPLACED. Finding new order...';
-                    try {
-                        const replacementResponse = await fetch('/api/find_replacement_order', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                account_hash: accountHash,
-                                original_order: {
-                                    orderId: activeOrder.orderId,
-                                    symbol: activeOrder.symbol,
-                                    option_type: activeOrder.option_type,
-                                    side: activeOrder.side,
-                                    strike_price: activeOrder.strike_price,
-                                    expiration_date: activeOrder.expiration_date
-                                }
-                            })
-                        });
-                        const replacementData = await replacementResponse.json();
-                        if (replacementData.success) {
-                            const newOrder = replacementData.replacement_order;
-                            // Update activeOrder with new details
-                            activeOrder.orderId = newOrder.orderId;
-                            activeOrder.price = newOrder.price;
-                            // The rest of the details (symbol, strike, etc.) are the same
-                            statusDisplay.textContent = `REPLACED. Now monitoring new order ${newOrder.orderId}`;
-                        } else {
-                            statusDisplay.textContent = `Error finding replacement: ${replacementData.error}`;
-                            if (statusPollInterval) clearInterval(statusPollInterval);
-                            isOrderActive = false;
-                        }
-                    } catch (e) {
-                        statusDisplay.textContent = 'API Error finding replacement.';
-                        if (statusPollInterval) clearInterval(statusPollInterval);
-                        isOrderActive = false;
-                    }
                 }
             }
         } catch (error) {
@@ -343,7 +307,11 @@ document.addEventListener('DOMContentLoaded', () => {
     strikeInput.addEventListener('change', handleInputChange);
     expiryInput.addEventListener('change', handleInputChange);
 
-    useBtn.addEventListener('click', () => fetchQuoteAndInstrumentPosition(true));
+    useBtn.addEventListener('click', () => {
+        if (positionPollInterval) clearInterval(positionPollInterval);
+        fetchPositions();
+        positionPollInterval = setInterval(fetchPositions, 10000);
+    });
     cbBtn.addEventListener('click', createOrderPlacementHandler('B', 'CALL'));
     csBtn.addEventListener('click', createOrderPlacementHandler('S', 'CALL'));
     pbBtn.addEventListener('click', createOrderPlacementHandler('B', 'PUT'));

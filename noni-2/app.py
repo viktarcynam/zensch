@@ -7,10 +7,95 @@ from datetime import datetime, timedelta
 # Add the parent directory to the Python path to import the client
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from client import SchwabClient
+import time
 
 app = Flask(__name__)
 
 # --- Helper functions from noni-1.py ---
+
+def parse_option_symbol(symbol_string):
+    """
+    Parses a standard OCC option symbol string.
+    Example: 'HOG   250815C00024000'
+    Returns: A dictionary with 'underlying', 'expiry_date', 'put_call', 'strike'.
+    """
+    try:
+        underlying = symbol_string[0:6].strip()
+        date_str = symbol_string[6:12]
+        expiry_date = datetime.strptime(date_str, '%y%m%d').strftime('%Y-%m-%d')
+        put_call = "CALL" if symbol_string[12] == 'C' else "PUT"
+        strike_int = int(symbol_string[13:])
+        strike = float(strike_int) / 1000.0
+
+        return {
+            "underlying": underlying,
+            "expiry_date": expiry_date,
+            "put_call": put_call,
+            "strike": strike
+        }
+    except (ValueError, IndexError) as e:
+        app.logger.error(f"Error parsing OCC symbol '{symbol_string}': {e}")
+        return None
+
+def find_replacement_order(client, account_hash, original_order):
+    """
+    Find the new order that replaced an old one.
+    It looks for a working order with the same instrument details and instruction.
+    Includes a retry mechanism to handle backend processing delays.
+    """
+    original_order_id = original_order['orderId']
+    app.logger.info(f"Searching for replacement of order {original_order_id}...")
+
+    max_retries = 3
+    retry_delay = 2 # seconds
+
+    for attempt in range(max_retries):
+        if attempt > 0:
+            app.logger.info(f"Retrying search... (Attempt {attempt + 1}/{max_retries})")
+            time.sleep(retry_delay)
+
+        working_statuses_to_check = ['WORKING', 'PENDING_ACTIVATION', 'ACCEPTED', 'QUEUED']
+        all_working_orders = []
+
+        for status in working_statuses_to_check:
+            orders_response = client.get_option_orders(account_id=account_hash, status=status, max_results=50)
+            if orders_response.get('success'):
+                all_working_orders.extend(orders_response.get('data', []))
+            else:
+                app.logger.warning(f"Could not retrieve orders with status '{status}'.")
+
+        if not all_working_orders:
+            if attempt < max_retries - 1:
+                continue
+            else:
+                app.logger.warning("No working orders found to search for replacement after multiple attempts.")
+                return None
+
+        # Search for the matching order in the retrieved list
+        for order in all_working_orders:
+            if str(order.get('orderId')) == str(original_order_id):
+                continue
+
+            for leg in order.get('orderLegCollection', []):
+                instrument = leg.get('instrument', {})
+                if instrument.get('assetType') == 'OPTION':
+                    candidate_details = parse_option_symbol(instrument.get('symbol'))
+                    if not candidate_details:
+                        continue
+
+                    # Compare all key details. The frontend sends snake_case keys.
+                    if (candidate_details['underlying'] == original_order['symbol'] and
+                        candidate_details['put_call'] == original_order['option_type'] and
+                        leg.get('instruction') == original_order['side'] and
+                        abs(candidate_details['strike'] - original_order['strike_price']) < 0.001 and
+                        candidate_details['expiry_date'] == original_order['expiration_date']):
+
+                        app.logger.info(f"Found replacement order: {order.get('orderId')} with status {order.get('status')}")
+                        return order
+
+    app.logger.warning("No replacement order found after multiple attempts.")
+    return None
+
 
 def get_nearest_strike(price):
     """Find the nearest strike price."""
@@ -282,6 +367,26 @@ def get_order_status():
             active_trade['status'] = new_status
             return jsonify({"success": True, "data": order_details_response.get('data', {})})
     return jsonify({"success": False, "error": f"Could not retrieve status for order {order_id}."}), 404
+
+@app.route('/api/find_replacement_order', methods=['POST'])
+def find_replacement_order_api():
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Invalid JSON"}), 400
+
+    original_order = data.get('original_order')
+    account_hash = data.get('account_hash')
+
+    if not original_order or not account_hash:
+        return jsonify({"success": False, "error": "Missing original_order or account_hash"}), 400
+
+    with SchwabClient() as client:
+        replacement_order = find_replacement_order(client, account_hash, original_order)
+
+        if replacement_order:
+            return jsonify({"success": True, "replacement_order": replacement_order})
+        else:
+            return jsonify({"success": False, "error": "Replacement order not found"}), 404
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

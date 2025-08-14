@@ -1,0 +1,38 @@
+2025-08-10 04:49:49,450 - state_manager - INFO - State file not found. Initializing with empty state.
+2025-08-10 04:49:49,451 - quotes_service - INFO - Quotes service initialized
+2025-08-10 04:49:49,452 - options_service - INFO - Options service initialized
+2025-08-10 04:49:49,491 - stock_orders_service - INFO - Order database initialized
+2025-08-10 04:49:49,491 - stock_orders_service - INFO - Stock orders service initialized
+2025-08-10 04:49:49,502 - option_orders_service - INFO - Option orders service initialized
+Starting Schwab API Server (No Credentials Mode)
+==================================================
+Server will run on localhost:3459
+
+The server will start without credentials.
+You can initialize credentials later using one of these methods:
+
+1. Using the client:
+   client.initialize_credentials(app_key, app_secret)
+
+2. Using JSON string:
+   client.send_request('{"action": "initialize_credentials", "app_key": "...", "app_secret": "..."}')
+
+3. Using file + JSON:
+   client.send_request("base_credentials.json", '{"app_key": "...", "app_secret": "..."}')
+
+Start server without credentials? (y/n): 2025-08-10 04:49:49,503 - state_manager - INFO - State file not found. Initializing with empty state.
+2025-08-10 04:49:49,505 - server - INFO - Schwab server started on localhost:3459
+2025-08-10 04:49:53,926 - server - INFO - New client connected from ('127.0.0.1', 39678)
+2025-08-10 04:49:53,927 - server - INFO - Received request from ('127.0.0.1', 39678): get_linked_accounts
+2025-08-10 04:49:53,928 - server - INFO - Client ('127.0.0.1', 39678) disconnected
+2025-08-10 04:49:53,941 - server - INFO - Received signal 15, shutting down...
+2025-08-10 04:49:53,941 - server - INFO - Stopping Schwab server...
+2025-08-10 04:49:53,941 - server - INFO - Schwab server stopped
+2025-08-10 04:49:53,941 - server - INFO - Stopping Schwab server...
+2025-08-10 04:49:53,941 - server - INFO - Schwab server stopped
+
+Server starting...
+Server is now running on localhost:3459
+Server is ready to accept connections.
+Use 'initialize_credentials' action to set up API access.
+Press Ctrl+C to stop the server.
