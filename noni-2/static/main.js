@@ -307,11 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     strikeInput.addEventListener('change', handleInputChange);
     expiryInput.addEventListener('change', handleInputChange);
 
-    useBtn.addEventListener('click', () => {
-        if (positionPollInterval) clearInterval(positionPollInterval);
-        fetchPositions();
-        positionPollInterval = setInterval(fetchPositions, 10000);
-    });
+    useBtn.addEventListener('click', fetchQuoteAndInstrumentPosition);
     cbBtn.addEventListener('click', createOrderPlacementHandler('B', 'CALL'));
     csBtn.addEventListener('click', createOrderPlacementHandler('S', 'CALL'));
     pbBtn.addEventListener('click', createOrderPlacementHandler('B', 'PUT'));
