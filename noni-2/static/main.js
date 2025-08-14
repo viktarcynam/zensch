@@ -140,8 +140,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (posData.success) {
                 const callQty = posData.call_quantity || 0;
                 const putQty = posData.put_quantity || 0;
-                callPositionDisplay.textContent = `${callQty}C`;
-                putPositionDisplay.textContent = `${putQty}P`;
+
+                const formatPos = (qty) => qty > 0 ? `+${qty}` : qty;
+
+                callPositionDisplay.textContent = `C:${formatPos(callQty)}`;
+                putPositionDisplay.textContent = `P:${formatPos(putQty)}`;
+
+                // Update colors based on position
                 callPositionDisplay.classList.toggle('has-pos', callQty != 0);
                 putPositionDisplay.classList.toggle('has-pos', putQty != 0);
             }

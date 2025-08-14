@@ -18,9 +18,13 @@
                 <div id="position-display" class="position-display"></div>
             </div>
 
-            <!-- Line 2: Strike, Expiry -->
-            <div class="control-line">
+            <!-- Line 2: Strike, Position, Expiry -->
+            <div class="control-line" id="strike-expiry-line">
                 <input type="number" id="strike-input" class="strike-input" placeholder="Strike">
+                <div id="instrument-position-group">
+                    <div id="call-position-display" class="instrument-position">C:0</div>
+                    <div id="put-position-display" class="instrument-position">P:0</div>
+                </div>
                 <input type="date" id="expiry-input" class="expiry-input">
             </div>
 
@@ -30,13 +34,11 @@
                     <div class="quote-item" data-label="b:"><span id="call-bid">-.--</span></div>
                     <div class="quote-item" data-label="a:"><span id="call-ask">-.--</span></div>
                     <div class="quote-item" data-label="vol:"><span id="call-vol">--</span></div>
-                    <div id="call-position-display" class="instrument-position">0C</div>
                 </div>
                 <div class="quote-group">
                     <div class="quote-item" data-label="b:"><span id="put-bid">-.--</span></div>
                     <div class="quote-item" data-label="a:"><span id="put-ask">-.--</span></div>
                     <div class="quote-item" data-label="vol:"><span id="put-vol">--</span></div>
-                    <div id="put-position-display" class="instrument-position">0P</div>
                 </div>
             </div>
 

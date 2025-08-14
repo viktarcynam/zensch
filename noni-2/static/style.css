@@ -214,3 +214,16 @@ input[type="date"].expiry-input {
 .cancel-main-btn:hover {
     background-color: #999;
 }
+
+#strike-expiry-line {
+    justify-content: space-between;
+    align-items: center;
+}
+
+#instrument-position-group {
+    display: flex;
+    justify-content: center;
+    gap: 15px; /* Add some space between C: and P: */
+    flex-grow: 1; /* Allow the group to take up space */
+    font-size: 1.1em;
+}
