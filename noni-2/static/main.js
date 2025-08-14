@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     callBidEl.textContent = callData.bid.toFixed(2);
                     callAskEl.textContent = callData.ask.toFixed(2);
                     callVolEl.textContent = callData.totalVolume;
-                    if (!isOrderActive || forceUpdate) {
+                    if (forceUpdate) {
                         cbPriceInput.value = (callData.bid + 0.01).toFixed(2);
                         csPriceInput.value = (callData.ask - 0.01).toFixed(2);
                     }
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     putBidEl.textContent = putData.bid.toFixed(2);
                     putAskEl.textContent = putData.ask.toFixed(2);
                     putVolEl.textContent = putData.totalVolume;
-                    if (!isOrderActive || forceUpdate) {
+                    if (forceUpdate) {
                         pbPriceInput.value = (putData.bid + 0.01).toFixed(2);
                         psPriceInput.value = (putData.ask - 0.01).toFixed(2);
                     }
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
         if (symbol && strike && expiry) {
-            fetchQuoteAndInstrumentPosition();
+            fetchQuoteAndInstrumentPosition(true); // Force update on new instrument
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
         }
     };
@@ -319,11 +319,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 price: parseFloat(priceInput.value)
             };
 
-
             placeOrder(orderDetails);
         });
     });
-
 
     cancelBtn.addEventListener('click', handleCancel);
 

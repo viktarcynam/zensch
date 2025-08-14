@@ -329,11 +329,9 @@ def poll_order_status(client, account_hash, order_to_monitor):
                                 print(f"Invalid price for sell order. Price ({format_price(new_price)}) cannot be lower than bid ({format_price(market_bid)}).")
                                 continue
 
-
                         # Per API rules, the instruction ('side') cannot be changed during a replacement.
                         # We must use the original instruction from the order being monitored.
                         print(f"New price {format_price(new_price)} is valid. Replacing order with original instruction '{order_to_monitor['instruction']}'...")
-
 
                         replace_response = client.replace_option_order(
                             account_id=account_hash,
@@ -775,7 +773,6 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
         accounts = positions_response.get('data', {}).get('accounts', [])
         for acc in accounts:
             for pos in acc.get('positions', []):
-
                 pos_instrument = pos.get('instrument', {})
                 if pos_instrument.get('assetType') == 'OPTION':
                     # Parse symbols from both sources and compare components
@@ -788,7 +785,6 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
                        abs(pos_details['strike'] - target_details['strike']) < 0.001:
                         current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
                         break
-
             if current_quantity != 0:
                 break
 
