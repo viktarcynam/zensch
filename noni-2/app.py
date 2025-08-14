@@ -28,6 +28,7 @@ DATA_CACHE = {
     'account_hashes': []   # List of available account hashes
 }
 CACHE_LOCK = threading.Lock()
+FAST_MODE_UNTIL = 0  # A timestamp until which fast mode is active
 
 
 def background_poller():
@@ -36,18 +37,42 @@ def background_poller():
     from the Schwab API to keep the local cache fresh.
     """
     app.logger.info("Background poller started.")
+    global FAST_MODE_UNTIL
+
     while True:
+        sleep_duration = 3.0  # Default to idle
         with SchwabClient() as client:
             with CACHE_LOCK:
-                # If there are no active orders, there's nothing to poll.
-                if not ACTIVE_ORDERS:
-                    # Still, we can refresh basic data like account hashes periodically.
+                now = time.time()
+                is_active = bool(ACTIVE_ORDERS)
+
+                # Determine if we are in fast mode
+                in_fast_mode = is_active or (now < FAST_MODE_UNTIL)
+
+                # If an order just became active (i.e., we were not active before, but are now),
+                # ensure fast mode is enabled for at least 30 seconds.
+                if is_active and not DATA_CACHE.get('was_active', False):
+                    FAST_MODE_UNTIL = now + 30
+                    app.logger.info("Active order detected. Entering fast poll mode for 30s.")
+
+                DATA_CACHE['was_active'] = is_active
+
+
+                if in_fast_mode:
+                    sleep_duration = 1.5
+                else:
+                    sleep_duration = 3.0
+
+                # If idle, just refresh accounts and continue
+                if not in_fast_mode:
                     acc_response = client.get_linked_accounts()
                     if acc_response.get('success'):
                         DATA_CACHE['account_hashes'] = acc_response.get('data', [])
-                    time.sleep(10) # Sleep longer when idle
+
+                    time.sleep(sleep_duration)
                     continue
 
+                # --- Main Polling Logic (Fast Mode) ---
                 # 1. Collect all unique symbols and account hashes from active orders
                 symbols_to_poll = set(order['symbol'] for order in ACTIVE_ORDERS.values())
                 account_hashes_to_poll = set(order['account_id'] for order in ACTIVE_ORDERS.values())
@@ -87,11 +112,12 @@ def background_poller():
                         # If order is terminal, remove it from active monitoring
                         if status_data.get('status') in ['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED']:
                             app.logger.info(f"Order {order_id} reached terminal state '{status_data.get('status')}'. Removing from active polling.")
-                            del ACTIVE_ORDERS[order_id]
+                            if order_id in ACTIVE_ORDERS:
+                                del ACTIVE_ORDERS[order_id]
                     else:
                         app.logger.warning(f"Poller failed to get status for order {order_id}")
 
-        time.sleep(3)  # Poll every 3 seconds
+        time.sleep(sleep_duration)
 
 
 # --- Flask Routes ---
@@ -228,6 +254,7 @@ def get_instrument_position():
 @app.route('/api/order', methods=['POST'])
 def handle_order():
     data = request.json
+    global FAST_MODE_UNTIL
     with SchwabClient() as client:
         details = data['order_details']
         response = client.place_option_order(**details)
@@ -235,9 +262,10 @@ def handle_order():
             order_id = response.get('data', {}).get('order_id')
             if order_id:
                 with CACHE_LOCK:
-                    # Add to active monitoring
+                    # Add to active monitoring and trigger fast poll mode
                     ACTIVE_ORDERS[order_id] = details
-                app.logger.info(f"Placed order {order_id}. Added to active monitoring.")
+                    FAST_MODE_UNTIL = time.time() + 30
+                app.logger.info(f"Placed order {order_id}. Added to active monitoring and triggered fast poll mode.")
                 return jsonify({"success": True, "order_id": order_id})
         return jsonify({"success": False, "error": response.get('error')}), 500
 
@@ -317,6 +345,7 @@ def find_replacement_order_api():
             new_order_id = replacement.get('orderId')
             if new_order_id:
                 with CACHE_LOCK:
+                    global FAST_MODE_UNTIL
                     # Remove old order and add new one
                     if standardized_order['orderId'] in ACTIVE_ORDERS:
                         del ACTIVE_ORDERS[standardized_order['orderId']]
@@ -325,10 +354,19 @@ def find_replacement_order_api():
                     new_order_details = standardized_order.copy()
                     new_order_details['price'] = replacement.get('price')
                     ACTIVE_ORDERS[new_order_id] = new_order_details
-                    app.logger.info(f"Replaced order {standardized_order['orderId']} with {new_order_id}. Updating active polling.")
+                    FAST_MODE_UNTIL = time.time() + 30
+                    app.logger.info(f"Replaced order {standardized_order['orderId']} with {new_order_id}. Updating active polling and triggering fast mode.")
             return jsonify({"success": True, "replacement_order": replacement})
 
     return jsonify({"success": False, "error": "Not found"}), 404
+
+@app.route('/api/trigger_fast_poll', methods=['POST'])
+def trigger_fast_poll():
+    global FAST_MODE_UNTIL
+    with CACHE_LOCK:
+        FAST_MODE_UNTIL = time.time() + 30
+    app.logger.info("Fast poll mode activated by frontend for 30 seconds.")
+    return jsonify({"success": True, "message": "Fast poll mode activated for 30 seconds."})
 
 
 @app.route('/api/log_error', methods=['POST'])

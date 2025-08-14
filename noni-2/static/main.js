@@ -308,7 +308,18 @@ document.addEventListener('DOMContentLoaded', () => {
     symbolInput.addEventListener('change', fetchAndSetDefaults);
     strikeInput.addEventListener('change', handleInputChange);
     expiryInput.addEventListener('change', handleInputChange);
-    useBtn.addEventListener('click', () => fetchQuoteAndInstrumentPosition(true));
+
+    useBtn.addEventListener('click', async () => {
+        // First, fetch the latest quotes immediately for the UI
+        fetchQuoteAndInstrumentPosition(true);
+
+        // Then, tell the backend to enter fast poll mode
+        try {
+            await fetch('/api/trigger_fast_poll', { method: 'POST' });
+        } catch (error) {
+            logError(`Failed to trigger fast poll: ${error.message}`);
+        }
+    });
 
     document.querySelectorAll('.order-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
