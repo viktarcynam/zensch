@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const callPositionDisplay = document.getElementById('call-position-display');
     const putPositionDisplay = document.getElementById('put-position-display');
     const cancelBtn = document.getElementById('cancel-btn');
-    const priceScroller = document.getElementById('price-scroller');
     const fillsScroller = document.getElementById('fills-scroller');
 
     // --- State Management ---
@@ -33,7 +32,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeOrder = null;
     let isOrderActive = false;
 
-    // --- Function Declarations ---
+    // --- Helper Functions ---
+    const logError = async (errorMessage) => {
+        console.error(errorMessage); // Keep logging to console
+        try {
+            await fetch('/api/log_error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: errorMessage })
+            });
+        } catch (e) {
+            console.error("Failed to log error to backend:", e);
+        }
+    };
+
+    const setStatus = (message, isError = false) => {
+        statusDisplay.textContent = message;
+        if (isError) {
+            logError(message);
+        }
+    };
+
+    // --- Core Functions ---
     const enableControls = (state) => {
         useBtn.disabled = !state;
         cancelBtn.disabled = !state;
@@ -49,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/recent_fills?account_hash=${accountHash}`);
             const data = await response.json();
             if (data.success && data.fills) {
-                fillsScroller.innerHTML = ''; // Clear old fills
+                fillsScroller.innerHTML = '';
                 data.fills.forEach(fill => {
                     const fillDiv = document.createElement('div');
                     fillDiv.textContent = fill;
@@ -57,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         } catch (error) {
-            console.error('Error fetching recent fills:', error);
+            logError(`Error fetching recent fills: ${error.message}`);
         }
     };
 
@@ -71,9 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 strikeInput.value = data.strike;
                 expiryInput.value = data.expiry;
                 handleInputChange();
+            } else {
+                setStatus(`Error fetching defaults: ${data.error}`, true);
             }
         } catch (error) {
-            console.error('Error fetching defaults:', error);
+            setStatus(`API Error fetching defaults: ${error.message}`, true);
         }
     };
 
@@ -83,14 +105,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`/api/positions/${symbol}?account_hash=${accountHash}`);
             const data = await response.json();
-            if (data.success) {
-                positionDisplay.textContent = data.display_text;
-            } else {
-                positionDisplay.textContent = 'Error';
-            }
+            positionDisplay.textContent = data.success ? data.display_text : 'Pos Error';
         } catch (error) {
-            console.error('Error fetching positions:', error);
-            positionDisplay.textContent = 'Error';
+            logError(`Error fetching positions: ${error.message}`);
+            positionDisplay.textContent = 'Pos Error';
         }
     };
 
@@ -100,13 +118,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const expiry = expiryInput.value;
         if (!symbol || !strike || !expiry || !accountHash) return;
 
-        // Fetch Quote
         try {
             const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
             const data = await response.json();
             if (data.success) {
-                const callMap = data.data.callExpDateMap;
-                const putMap = data.data.putExpDateMap;
+                const callMap = data.data.callExpDateMap, putMap = data.data.putExpDateMap;
                 const normalizedStrikeKey = parseFloat(strike).toFixed(1);
                 const callData = callMap?.[Object.keys(callMap)[0]]?.[normalizedStrikeKey]?.[0];
                 const putData = putMap?.[Object.keys(putMap)[0]]?.[normalizedStrikeKey]?.[0];
@@ -130,28 +146,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } catch (error) {
-            console.error('Error fetching options:', error);
+            logError(`Error fetching options: ${error.message}`);
         }
 
-        // Fetch Positions for the specific instruments
         try {
             const posResponse = await fetch(`/api/instrument_position?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
             const posData = await posResponse.json();
             if (posData.success) {
-                const callQty = posData.call_quantity || 0;
-                const putQty = posData.put_quantity || 0;
-
+                const { call_quantity: callQty = 0, put_quantity: putQty = 0 } = posData;
                 const formatPos = (qty) => qty > 0 ? `+${qty}` : qty;
-
                 callPositionDisplay.textContent = `C:${formatPos(callQty)}`;
                 putPositionDisplay.textContent = `P:${formatPos(putQty)}`;
-
-                // Update colors based on position
                 callPositionDisplay.classList.toggle('has-pos', callQty != 0);
                 putPositionDisplay.classList.toggle('has-pos', putQty != 0);
             }
         } catch(error) {
-            console.error('Error fetching instrument position:', error);
+            logError(`Error fetching instrument position: ${error.message}`);
         }
     };
 
@@ -161,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
         if (symbol && strike && expiry) {
-            fetchQuoteAndInstrumentPosition(true); // Force update on new instrument
+            fetchQuoteAndInstrumentPosition(true);
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
         }
     };
@@ -177,14 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 isOrderActive = true;
                 activeOrder = { ...orderDetails, orderId: data.order_id };
-                statusDisplay.textContent = `Placed ${activeOrder.side} ${activeOrder.symbol}`;
+                setStatus(`Placed ${activeOrder.side} ${activeOrder.symbol}`);
                 if (statusPollInterval) clearInterval(statusPollInterval);
                 statusPollInterval = setInterval(pollOrderStatus, 2000);
             } else {
-                statusDisplay.textContent = `Error: ${data.error}`;
+                setStatus(`Error: ${data.error}`, true);
             }
         } catch (error) {
-            statusDisplay.textContent = 'API Error.';
+            setStatus(`API Error placing order: ${error.message}`, true);
         }
     };
 
@@ -198,15 +208,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await response.json();
             if (data.success) {
-                statusDisplay.textContent = 'Canceled';
+                setStatus('Canceled');
                 if (statusPollInterval) clearInterval(statusPollInterval);
                 activeOrder = null;
                 isOrderActive = false;
             } else {
-                 statusDisplay.textContent = `Cancel Error: ${data.error}`;
+                 setStatus(`Cancel Error: ${data.error}`, true);
             }
         } catch(error) {
-            statusDisplay.textContent = 'API Error.';
+            setStatus(`API Error canceling: ${error.message}`, true);
         }
     };
 
@@ -217,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.success) {
                 const orderData = data.data;
-                statusDisplay.textContent = `${orderData.status} ${activeOrder.side}`;
+                setStatus(`${orderData.status} ${activeOrder.side}`);
                 if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(orderData.status)) {
                     if (statusPollInterval) clearInterval(statusPollInterval);
                     activeOrder = null;
@@ -235,15 +245,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         const newOrder = replacementData.replacement_order;
                         activeOrder.orderId = newOrder.orderId;
                         activeOrder.price = newOrder.price;
-                        statusDisplay.textContent = `REPLACED. New order ${newOrder.orderId}`;
+                        setStatus(`REPLACED. New order ${newOrder.orderId}`);
                     } else {
-                        statusDisplay.textContent = `REPLACED, but error finding new: ${replacementData.error}`;
+                        const msg = `REPLACED, but error finding new: ${replacementData.error}`;
+                        setStatus(msg, true);
                         if (statusPollInterval) clearInterval(statusPollInterval);
                     }
                 }
             }
         } catch (error) {
-            console.error('Error polling status:', error);
+            logError(`Error polling status: ${error.message}`);
         }
     };
 
@@ -254,15 +265,37 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 accountHash = data.account_hash;
                 enableControls(true);
-                statusDisplay.textContent = 'Idle';
+                setStatus('Idle');
                 fetchRecentFills();
                 setInterval(fetchRecentFills, 30000);
                 setInterval(fetchPositions, 10000);
+
+                // Heartbeat poller for state synchronization
+                setInterval(async () => {
+                    const symbol = symbolInput.value.trim().toUpperCase();
+                    const strike = strikeInput.value;
+                    const expiry = expiryInput.value;
+                    if (isOrderActive && accountHash && symbol && strike && expiry) {
+                        try {
+                            const res = await fetch(`/api/has_active_orders?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
+                            const syncData = await res.json();
+                            if (syncData.success && !syncData.has_active) {
+                                setStatus('Order cleared externally. Resetting.', true);
+                                if (statusPollInterval) clearInterval(statusPollInterval);
+                                activeOrder = null;
+                                isOrderActive = false;
+                            }
+                        } catch (e) {
+                            logError(`Heartbeat poll failed: ${e.message}`);
+                        }
+                    }
+                }, 30000); // Poll every 30 seconds
+
             } else {
-                statusDisplay.textContent = `Error: ${data.error}`;
+                setStatus(`Error: ${data.error}`, true);
             }
         } catch (error) {
-            statusDisplay.textContent = 'Backend not reachable.';
+            setStatus(`Backend not reachable: ${error.message}`, true);
         }
     };
 
@@ -274,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.order-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-            const [type, action] = e.target.id.split('-')[0]; // cb -> c, b
+            const [type, action] = e.target.id.split('-')[0];
             const optionType = type === 'c' ? 'CALL' : 'PUT';
             const simpleAction = action === 'b' ? 'B' : 'S';
             const priceInput = document.getElementById(`${type}${action}-price`);
@@ -283,7 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const strike = strikeInput.value;
             const expiry = expiryInput.value;
 
-            // First, get the current position for this specific instrument
             let currentQuantity = 0;
             try {
                 const posResponse = await fetch(`/api/instrument_position?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
@@ -291,19 +323,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (posData.success) {
                     currentQuantity = optionType === 'CALL' ? posData.call_quantity : posData.put_quantity;
                 } else {
-                    statusDisplay.textContent = 'Error getting position.';
+                    setStatus('Error getting position.', true);
                     return;
                 }
             } catch (error) {
-                statusDisplay.textContent = 'API Error getting position.';
+                setStatus(`API Error getting position: ${error.message}`, true);
                 return;
             }
 
-            // Now, determine the correct side
             let side = '';
             if (simpleAction === 'B') {
                 side = currentQuantity < 0 ? 'BUY_TO_CLOSE' : 'BUY_TO_OPEN';
-            } else { // 'S'
+            } else {
                 side = currentQuantity > 0 ? 'SELL_TO_CLOSE' : 'SELL_TO_OPEN';
             }
 
