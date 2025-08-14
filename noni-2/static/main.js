@@ -20,45 +20,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const pbBtn = document.getElementById('pb-btn');
     const psBtn = document.getElementById('ps-btn');
     const statusDisplay = document.getElementById('status-display');
-    const inProgressPositionDisplay = document.getElementById('in-progress-position-display');
+    const callPositionDisplay = document.getElementById('call-position-display');
+    const putPositionDisplay = document.getElementById('put-position-display');
     const cancelBtn = document.getElementById('cancel-btn');
     const priceScroller = document.getElementById('price-scroller');
     const fillsScroller = document.getElementById('fills-scroller');
 
     // --- State Management ---
     let accountHash = null;
-    let positionPollInterval = null;
     let statusPollInterval = null;
     let quotePollInterval = null;
-    let underlyingPricePollInterval = null;
-    let recentFillsPollInterval = null;
     let activeOrder = null;
     let isOrderActive = false;
 
     // --- Function Declarations ---
-    const enableControls = () => {
-        useBtn.disabled = false;
-        cancelBtn.disabled = false;
-        cbBtn.disabled = false;
-        csBtn.disabled = false;
-        pbBtn.disabled = false;
-        psBtn.disabled = false;
-    };
-
-    const fetchUnderlyingPrice = async () => {
-        const symbol = symbolInput.value.trim().toUpperCase();
-        if (!symbol) return;
-        try {
-            const response = await fetch(`/api/underlying_price/${symbol}`);
-            const data = await response.json();
-            if (data.success) {
-                const priceDiv = document.createElement('div');
-                priceDiv.textContent = data.price.toFixed(2);
-                priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
-            }
-        } catch (error) {
-            console.error('Error fetching underlying price:', error);
-        }
+    const enableControls = (state) => {
+        useBtn.disabled = !state;
+        cancelBtn.disabled = !state;
+        cbBtn.disabled = !state;
+        csBtn.disabled = !state;
+        pbBtn.disabled = !state;
+        psBtn.disabled = !state;
     };
 
     const fetchRecentFills = async () => {
@@ -89,9 +71,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 strikeInput.value = data.strike;
                 expiryInput.value = data.expiry;
                 handleInputChange();
-                if (underlyingPricePollInterval) clearInterval(underlyingPricePollInterval);
-                fetchUnderlyingPrice();
-                underlyingPricePollInterval = setInterval(fetchUnderlyingPrice, 2000);
             }
         } catch (error) {
             console.error('Error fetching defaults:', error);
@@ -115,12 +94,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const fetchQuoteAndInstrumentPosition = async () => {
+    const fetchQuoteAndInstrumentPosition = async (forceUpdate = false) => {
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
         if (!symbol || !strike || !expiry || !accountHash) return;
 
+        // Fetch Quote
         try {
             const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
             const data = await response.json();
@@ -134,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     callBidEl.textContent = callData.bid.toFixed(2);
                     callAskEl.textContent = callData.ask.toFixed(2);
                     callVolEl.textContent = callData.totalVolume;
-                    if (!isOrderActive) {
+                    if (!isOrderActive || forceUpdate) {
                         cbPriceInput.value = (callData.bid + 0.01).toFixed(2);
                         csPriceInput.value = (callData.ask - 0.01).toFixed(2);
                     }
@@ -143,26 +123,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     putBidEl.textContent = putData.bid.toFixed(2);
                     putAskEl.textContent = putData.ask.toFixed(2);
                     putVolEl.textContent = putData.totalVolume;
-                    if (!isOrderActive) {
+                    if (!isOrderActive || forceUpdate) {
                         pbPriceInput.value = (putData.bid + 0.01).toFixed(2);
                         psPriceInput.value = (putData.ask - 0.01).toFixed(2);
                     }
                 }
-            } else {
-                console.error("Error fetching options.");
             }
         } catch (error) {
             console.error('Error fetching options:', error);
         }
 
+        // Fetch Positions for the specific instruments
         try {
-            const optionType = activeOrder?.option_type || (document.getElementById('cb-btn').disabled ? 'PUT' : 'CALL'); // Guess based on what's active
-            const posResponse = await fetch(`/api/instrument_position?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}&option_type=${optionType}`);
+            const posResponse = await fetch(`/api/instrument_position?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
             const posData = await posResponse.json();
             if (posData.success) {
-                const position = posData.quantity || 0;
-                let putCallText = optionType[0];
-                inProgressPositionDisplay.textContent = position !== 0 ? `${position > 0 ? '+' : ''}${position} ${putCallText}` : '0';
+                const callQty = posData.call_quantity || 0;
+                const putQty = posData.put_quantity || 0;
+
+                const formatPos = (qty) => qty > 0 ? `+${qty}` : qty;
+
+                callPositionDisplay.textContent = `C:${formatPos(callQty)}`;
+                putPositionDisplay.textContent = `P:${formatPos(putQty)}`;
+
+                // Update colors based on position
+                callPositionDisplay.classList.toggle('has-pos', callQty != 0);
+                putPositionDisplay.classList.toggle('has-pos', putQty != 0);
             }
         } catch(error) {
             console.error('Error fetching instrument position:', error);
@@ -180,47 +166,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const createOrderPlacementHandler = (action, optionType) => {
-        return async () => {
-            if (!accountHash) { statusDisplay.textContent = 'Account not loaded.'; return; }
-            const priceInputId = `${optionType[0].toLowerCase()}${action.toLowerCase()}-price`;
-            const priceInput = document.getElementById(priceInputId);
-            const orderDetails = {
-                account_id: accountHash,
-                symbol: symbolInput.value.trim().toUpperCase(),
-                option_type: optionType,
-                expiration_date: expiryInput.value,
-                strike_price: parseFloat(strikeInput.value),
-                quantity: 1,
-                simple_action: action,
-                order_type: 'LIMIT',
-                price: parseFloat(priceInput.value)
-            };
-            try {
-                const response = await fetch('/api/order', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'place_or_replace', order_details: orderDetails })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    isOrderActive = true;
-                    activeOrder = { ...orderDetails, side: data.trade_status, orderId: data.order_id };
-                    statusDisplay.textContent = `${activeOrder.side} ${activeOrder.symbol} ${activeOrder.strike_price}${activeOrder.option_type[0]} @ ${activeOrder.price}`;
-                    if (statusPollInterval) clearInterval(statusPollInterval);
-                    statusPollInterval = setInterval(pollOrderStatus, 4000);
-                } else {
-                    statusDisplay.textContent = `Error: ${data.error}`;
-                }
-            } catch (error) {
-                console.error('Error placing order:', error);
-                statusDisplay.textContent = 'API Error.';
+    const placeOrder = async (orderDetails) => {
+        try {
+            const response = await fetch('/api/order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'place', order_details: orderDetails })
+            });
+            const data = await response.json();
+            if (data.success) {
+                isOrderActive = true;
+                activeOrder = { ...orderDetails, orderId: data.order_id };
+                statusDisplay.textContent = `Placed ${activeOrder.side} ${activeOrder.symbol}`;
+                if (statusPollInterval) clearInterval(statusPollInterval);
+                statusPollInterval = setInterval(pollOrderStatus, 2000);
+            } else {
+                statusDisplay.textContent = `Error: ${data.error}`;
             }
-        };
+        } catch (error) {
+            statusDisplay.textContent = 'API Error.';
+        }
     };
 
     const handleCancel = async () => {
-        if (!activeOrder || !accountHash) { statusDisplay.textContent = 'No active order.'; return; }
+        if (!activeOrder || !accountHash) return;
         try {
             const response = await fetch('/api/order', {
                 method: 'POST',
@@ -229,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await response.json();
             if (data.success) {
-                statusDisplay.textContent = 'Order Canceled. Idle';
+                statusDisplay.textContent = 'Canceled';
                 if (statusPollInterval) clearInterval(statusPollInterval);
                 activeOrder = null;
                 isOrderActive = false;
@@ -237,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
                  statusDisplay.textContent = `Cancel Error: ${data.error}`;
             }
         } catch(error) {
-            console.error('Error canceling order:', error);
             statusDisplay.textContent = 'API Error.';
         }
     };
@@ -248,18 +216,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/order_status');
             const data = await response.json();
             if (data.success) {
-                const status = data.data.status;
-                if (!status) return;
-                const details = activeOrder;
-                statusDisplay.textContent = `${status} ${details.side} ${details.symbol} ${details.strike_price}${details.option_type[0]} @ ${details.price}`;
-                if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(status)) {
+                const orderData = data.data;
+                statusDisplay.textContent = `${orderData.status} ${activeOrder.side}`;
+                if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(orderData.status)) {
                     if (statusPollInterval) clearInterval(statusPollInterval);
                     activeOrder = null;
                     isOrderActive = false;
-                    if(status === 'FILLED') {
-                        statusDisplay.textContent = `FILLED! Ready for next trade.`;
-                        fetchPositions();
-                        fetchRecentFills(); // Refresh fills on a fill
+                    fetchPositions();
+                    fetchRecentFills();
+                } else if (orderData.status === 'REPLACED') {
+                    const replacementResponse = await fetch('/api/find_replacement_order', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ account_hash: accountHash, original_order: activeOrder })
+                    });
+                    const replacementData = await replacementResponse.json();
+                    if (replacementData.success) {
+                        const newOrder = replacementData.replacement_order;
+                        activeOrder.orderId = newOrder.orderId;
+                        activeOrder.price = newOrder.price;
+                        statusDisplay.textContent = `REPLACED. New order ${newOrder.orderId}`;
+                    } else {
+                        statusDisplay.textContent = `REPLACED, but error finding new: ${replacementData.error}`;
+                        if (statusPollInterval) clearInterval(statusPollInterval);
                     }
                 }
             }
@@ -274,44 +253,78 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.success) {
                 accountHash = data.account_hash;
-                enableControls();
+                enableControls(true);
                 statusDisplay.textContent = 'Idle';
-                fetchRecentFills(); // Fetch on load
-                recentFillsPollInterval = setInterval(fetchRecentFills, 30000); // Poll every 30s
+                fetchRecentFills();
+                setInterval(fetchRecentFills, 30000);
+                setInterval(fetchPositions, 10000);
             } else {
-                statusDisplay.textContent = `Error: ${data.error || 'Could not load account.'}`;
+                statusDisplay.textContent = `Error: ${data.error}`;
             }
         } catch (error) {
-            statusDisplay.textContent = `Error: ${error.message || 'Backend not reachable.'}`;
+            statusDisplay.textContent = 'Backend not reachable.';
         }
     };
 
     // --- Event Listeners ---
-    document.querySelectorAll('.price-adjust-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            const targetInput = document.getElementById(button.dataset.target);
-            const amount = parseFloat(button.dataset.amount);
-            if (targetInput) {
-                const currentValue = parseFloat(targetInput.value) || 0;
-                targetInput.value = (currentValue + amount).toFixed(2);
+    symbolInput.addEventListener('change', fetchAndSetDefaults);
+    strikeInput.addEventListener('change', handleInputChange);
+    expiryInput.addEventListener('change', handleInputChange);
+    useBtn.addEventListener('click', () => fetchQuoteAndInstrumentPosition(true));
+
+    document.querySelectorAll('.order-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const [type, action] = e.target.id.split('-')[0]; // cb -> c, b
+            const optionType = type === 'c' ? 'CALL' : 'PUT';
+            const simpleAction = action === 'b' ? 'B' : 'S';
+            const priceInput = document.getElementById(`${type}${action}-price`);
+
+            const symbol = symbolInput.value.trim().toUpperCase();
+            const strike = strikeInput.value;
+            const expiry = expiryInput.value;
+
+            // First, get the current position for this specific instrument
+            let currentQuantity = 0;
+            try {
+                const posResponse = await fetch(`/api/instrument_position?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
+                const posData = await posResponse.json();
+                if (posData.success) {
+                    currentQuantity = optionType === 'CALL' ? posData.call_quantity : posData.put_quantity;
+                } else {
+                    statusDisplay.textContent = 'Error getting position.';
+                    return;
+                }
+            } catch (error) {
+                statusDisplay.textContent = 'API Error getting position.';
+                return;
             }
+
+            // Now, determine the correct side
+            let side = '';
+            if (simpleAction === 'B') {
+                side = currentQuantity < 0 ? 'BUY_TO_CLOSE' : 'BUY_TO_OPEN';
+            } else { // 'S'
+                side = currentQuantity > 0 ? 'SELL_TO_CLOSE' : 'SELL_TO_OPEN';
+            }
+
+            const orderDetails = {
+                account_id: accountHash,
+                symbol: symbol,
+                option_type: optionType,
+                expiration_date: expiry,
+                strike_price: parseFloat(strike),
+                quantity: 1,
+                side: side,
+                order_type: 'LIMIT',
+                price: parseFloat(priceInput.value)
+            };
+
+
+            placeOrder(orderDetails);
         });
     });
 
-    symbolInput.addEventListener('change', () => {
-        if (quotePollInterval) clearInterval(quotePollInterval);
-        if (underlyingPricePollInterval) clearInterval(underlyingPricePollInterval);
-        priceScroller.innerHTML = '';
-        fetchAndSetDefaults();
-    });
-    strikeInput.addEventListener('change', handleInputChange);
-    expiryInput.addEventListener('change', handleInputChange);
 
-    useBtn.addEventListener('click', fetchQuoteAndInstrumentPosition);
-    cbBtn.addEventListener('click', createOrderPlacementHandler('B', 'CALL'));
-    csBtn.addEventListener('click', createOrderPlacementHandler('S', 'CALL'));
-    pbBtn.addEventListener('click', createOrderPlacementHandler('B', 'PUT'));
-    psBtn.addEventListener('click', createOrderPlacementHandler('S', 'PUT'));
     cancelBtn.addEventListener('click', handleCancel);
 
     // --- Start the app ---

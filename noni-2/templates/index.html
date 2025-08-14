@@ -18,9 +18,13 @@
                 <div id="position-display" class="position-display"></div>
             </div>
 
-            <!-- Line 2: Strike, Expiry -->
-            <div class="control-line">
+            <!-- Line 2: Strike, Position, Expiry -->
+            <div class="control-line" id="strike-expiry-line">
                 <input type="number" id="strike-input" class="strike-input" placeholder="Strike">
+                <div id="instrument-position-group">
+                    <div id="call-position-display" class="instrument-position">C:0</div>
+                    <div id="put-position-display" class="instrument-position">P:0</div>
+                </div>
                 <input type="date" id="expiry-input" class="expiry-input">
             </div>
 
@@ -77,7 +81,6 @@
             <!-- Line 4: Status and Cancel -->
             <div class="control-line">
                 <div id="status-display" class="status-display">Initializing...</div>
-                <div id="in-progress-position-display" class="in-progress-position">0</div>
                 <button id="cancel-btn" class="control-btn cancel-main-btn" disabled>Cancel</button>
             </div>
         </div>

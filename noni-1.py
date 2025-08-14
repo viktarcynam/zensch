@@ -329,27 +329,11 @@ def poll_order_status(client, account_hash, order_to_monitor):
                                 print(f"Invalid price for sell order. Price ({format_price(new_price)}) cannot be lower than bid ({format_price(market_bid)}).")
                                 continue
 
-                        # Re-calculate side based on current positions
-                        action = 'B' if is_buy_order else 'S'
-                        positions_response = client.get_positions_by_symbol(symbol=order_to_monitor['symbol'], account_hash=account_hash)
-                        current_quantity = 0
-                        if positions_response.get('success') and positions_response.get('data'):
-                            accounts = positions_response.get('data', {}).get('accounts', [])
-                            for acc in accounts:
-                                for pos in acc.get('positions', []):
-                                    if pos.get('instrument', {}).get('symbol') == option_list_data.get('symbol'):
-                                        current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
-                                        break
-                                if current_quantity != 0:
-                                    break
 
-                        side = ""
-                        if action == 'B':
-                            side = "BUY_TO_CLOSE" if current_quantity < 0 else "BUY_TO_OPEN"
-                        else:  # 'S'
-                            side = "SELL_TO_CLOSE" if current_quantity > 0 else "SELL_TO_OPEN"
+                        # Per API rules, the instruction ('side') cannot be changed during a replacement.
+                        # We must use the original instruction from the order being monitored.
+                        print(f"New price {format_price(new_price)} is valid. Replacing order with original instruction '{order_to_monitor['instruction']}'...")
 
-                        print(f"New price {format_price(new_price)} is valid. Replacing order with side '{side}'...")
 
                         replace_response = client.replace_option_order(
                             account_id=account_hash,
@@ -359,7 +343,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
                             expiration_date=order_to_monitor['expiry'],
                             strike_price=order_to_monitor['strike'],
                             quantity=order_to_monitor['quantity'],
-                            side=side,
+                            side=order_to_monitor['instruction'], # Use the original, unchanged instruction
                             order_type="LIMIT",
                             price=new_price
                         )
@@ -374,7 +358,7 @@ def poll_order_status(client, account_hash, order_to_monitor):
                                 current_order_id = new_order_id
                                 order_to_monitor['orderId'] = new_order_id
                                 order_to_monitor['price'] = new_price
-                                order_to_monitor['instruction'] = side # Update instruction based on new side
+                                # The instruction does not change on a replacement, so no need to update it.
 
                                 # Rebuild the summary string for display
                                 order_summary = (f"{order_to_monitor['instruction'].replace('_', ' ')} {int(order_to_monitor['quantity'])} "
@@ -791,9 +775,20 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
         accounts = positions_response.get('data', {}).get('accounts', [])
         for acc in accounts:
             for pos in acc.get('positions', []):
-                if pos.get('instrument', {}).get('symbol') == target_option_data.get('symbol'):
-                    current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
-                    break
+
+                pos_instrument = pos.get('instrument', {})
+                if pos_instrument.get('assetType') == 'OPTION':
+                    # Parse symbols from both sources and compare components
+                    pos_details = parse_option_symbol(pos_instrument.get('symbol'))
+                    target_details = parse_option_symbol(target_option_data.get('symbol'))
+                    if pos_details and target_details and \
+                       pos_details['underlying'].upper() == target_details['underlying'].upper() and \
+                       pos_details['expiry_date'] == target_details['expiry_date'] and \
+                       pos_details['put_call'] == target_details['put_call'] and \
+                       abs(pos_details['strike'] - target_details['strike']) < 0.001:
+                        current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+                        break
+
             if current_quantity != 0:
                 break
 
@@ -1026,8 +1021,32 @@ def noni_1_main():
                         existing_order_id = existing_order.get('orderId')
                         print(f"Replacing order {existing_order_id}...")
 
-                        # Determine the side for the replacement order
-                        side = "BUY_TO_OPEN" if action == 'B' else ("SELL_TO_CLOSE" if any(p['instrument'].get('symbol') == target_option_data['symbol'] for p in positions_response.get('positions',[])) else "SELL_TO_OPEN")
+                        # Determine side
+                        current_quantity = 0
+                        if positions_response.get('success') and positions_response.get('data'):
+                            accounts = positions_response.get('data', {}).get('accounts', [])
+                            for acc in accounts:
+                                for pos in acc.get('positions', []):
+                                    pos_instrument = pos.get('instrument', {})
+                                    if pos_instrument.get('assetType') == 'OPTION':
+                                        # Parse symbols from both sources and compare components
+                                        pos_details = parse_option_symbol(pos_instrument.get('symbol'))
+                                        target_details = parse_option_symbol(target_option_data.get('symbol'))
+                                        if pos_details and target_details and \
+                                           pos_details['underlying'].upper() == target_details['underlying'].upper() and \
+                                           pos_details['expiry_date'] == target_details['expiry_date'] and \
+                                           pos_details['put_call'] == target_details['put_call'] and \
+                                           abs(pos_details['strike'] - target_details['strike']) < 0.001:
+                                            current_quantity = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+                                            break
+                                if current_quantity != 0:
+                                    break
+
+                        side = ""
+                        if action == 'B':
+                            side = "BUY_TO_CLOSE" if current_quantity < 0 else "BUY_TO_OPEN"
+                        else:  # 'S'
+                            side = "SELL_TO_CLOSE" if current_quantity > 0 else "SELL_TO_OPEN"
 
                         replace_response = client.replace_option_order(
                             account_id=account_hash,

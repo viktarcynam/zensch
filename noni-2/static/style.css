@@ -121,6 +121,16 @@ input[type="date"].expiry-input {
     width: 60px;
     text-align: center;
 }
+
+.instrument-position {
+    color: #ccc;
+    padding: 0 5px;
+}
+
+.instrument-position.has-pos {
+    color: #ffc107; /* A gold/yellow color */
+    font-weight: bold;
+}
 .quote-item[data-label]::before {
     content: attr(data-label);
     font-weight: normal;
@@ -204,4 +214,17 @@ input[type="date"].expiry-input {
 }
 .cancel-main-btn:hover {
     background-color: #999;
+}
+
+#strike-expiry-line {
+    justify-content: space-between;
+    align-items: center;
+}
+
+#instrument-position-group {
+    display: flex;
+    justify-content: center;
+    gap: 15px; /* Add some space between C: and P: */
+    flex-grow: 1; /* Allow the group to take up space */
+    font-size: 1.1em;
 }
