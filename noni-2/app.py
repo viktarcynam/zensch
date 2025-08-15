@@ -231,16 +231,56 @@ def get_instrument_position():
 @app.route('/api/order', methods=['POST'])
 def handle_order():
     data = request.json
+    details = data.get('order_details', {})
+    if not details:
+        return jsonify({"success": False, "error": "Missing order_details"}), 400
+
     global FAST_MODE_UNTIL
+
+    # Check for an existing order for the same instrument to replace
+    existing_order_to_replace = None
+    with CACHE_LOCK:
+        for order_id, active_order in ACTIVE_ORDERS.items():
+            # Match on the core instrument details, but not price
+            if (active_order.get('symbol') == details.get('symbol') and
+                active_order.get('option_type') == details.get('option_type') and
+                active_order.get('strike_price') == details.get('strike_price') and
+                active_order.get('expiration_date') == details.get('expiration_date')):
+
+                # We found a candidate to replace
+                existing_order_to_replace = active_order
+                break
+
     with SchwabClient() as client:
-        details = data['order_details']
-        response = client.place_option_order(**details)
+        if existing_order_to_replace:
+            # --- We are replacing an existing order ---
+            app.logger.info(f"Found existing order {existing_order_to_replace['order_id']}. Replacing it.")
+            # The client's replace function requires all details, not just the changes.
+            # We use the details from the incoming request.
+            response = client.replace_option_order(
+                account_id=details['account_id'],
+                order_id=existing_order_to_replace['order_id'],
+                symbol=details['symbol'],
+                option_type=details['option_type'],
+                expiration_date=details['expiration_date'],
+                strike_price=details['strike_price'],
+                quantity=details['quantity'],
+                side=details['side'],
+                order_type=details['order_type'],
+                price=details.get('price')
+            )
+        else:
+            # --- We are placing a new order ---
+            app.logger.info("No existing order found. Placing a new order.")
+            response = client.place_option_order(**details)
+
         if response.get('success'):
             with CACHE_LOCK:
                 FAST_MODE_UNTIL = time.time() + 30
-            app.logger.info(f"Placed order. Response: {response.get('data')}")
+            app.logger.info(f"Order request successful. Response: {response.get('data')}")
             return jsonify({"success": True})
-    return jsonify({"success": False, "error": response.get('error')}), 500
+
+    return jsonify({"success": False, "error": response.get('error', 'Unknown error')}), 500
 
 @app.route('/api/cancel_order', methods=['POST'])
 def cancel_order():
