@@ -135,14 +135,13 @@ def background_poller():
 
                             # Now, compare with our watchlist of interested instruments
                             for interested in INTERESTED_INSTRUMENTS.values():
-                                # Ensure all keys exist before comparing, now including option_type
-                                if all(k in interested for k in ['symbol', 'strike', 'expiry', 'option_type']):
+                                # Ensure all keys exist before comparing
+                                if all(k in interested for k in ['symbol', 'strike', 'expiry']):
                                     if (interested['symbol'].upper() == order_symbol and
-                                        interested['option_type'] == order_put_call and
                                         abs(interested['strike'] - order_strike) < 0.001 and
                                         interested['expiry'] == order_expiry):
 
-                                        app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol} ({order_put_call}). Adding to active monitoring.")
+                                        app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol} via description. Adding to active monitoring.")
                                         # Add it to ACTIVE_ORDERS so we can start tracking it
                                         ACTIVE_ORDERS[order_id] = {
                                             "account_id": primary_account_hash,
@@ -155,8 +154,8 @@ def background_poller():
                                             "order_type": order.get('orderType'),
                                             "price": order.get('price')
                                         }
-                                        # Found a match, no need to check other watchlist items for this order
-                                        break
+                                        # Found a match, but we don't break, so we can discover
+                                        # both a call and a put if they both have working orders.
                         except (KeyError, TypeError) as e:
                             app.logger.error(f"Error processing discovered order {order_id}: {e}")
                             continue # Move to the next order
@@ -498,6 +497,48 @@ def has_active_orders():
     with CACHE_LOCK:
         has_active = order_id in ACTIVE_ORDERS
     return jsonify({"success": True, "has_active": has_active})
+
+
+@app.route('/api/get_instrument_orders', methods=['GET'])
+def get_instrument_orders():
+    symbol = request.args.get('symbol')
+    strike_str = request.args.get('strike')
+    expiry = request.args.get('expiry')
+
+    if not all([symbol, strike_str, expiry]):
+        return jsonify({"success": False, "error": "Missing params", "orders": []}), 400
+
+    try:
+        strike = float(strike_str)
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "error": "Invalid strike price", "orders": []}), 400
+
+    found_orders = []
+
+    with CACHE_LOCK:
+        # Find all active orders that match the instrument
+        for order_id, order_details in ACTIVE_ORDERS.items():
+            details_strike = order_details.get('strike_price') or order_details.get('strike')
+            details_expiry = order_details.get('expiration_date') or order_details.get('expiry')
+
+            if (order_details.get('symbol') == symbol and
+                details_strike == strike and
+                details_expiry == expiry):
+
+                status_data = DATA_CACHE.get('order_statuses', {}).get(order_id, {})
+
+                order_info = {
+                    "order_id": order_id,
+                    "account_id": order_details.get('account_id'),
+                    "type": order_details.get('option_type') or order_details.get('putCall'),
+                    "status": status_data.get('status', 'UNKNOWN'),
+                    "side": order_details.get('side'),
+                    "quantity": order_details.get('quantity'),
+                    "price": order_details.get('price')
+                }
+                found_orders.append(order_info)
+
+    return jsonify({"success": True, "orders": found_orders})
 
 
 if __name__ == '__main__':

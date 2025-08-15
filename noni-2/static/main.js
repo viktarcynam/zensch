@@ -29,9 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let accountHash = null;
     let statusPollInterval = null;
     let quotePollInterval = null;
-    let activeOrder = null;
-    let isOrderActive = false;
-    let activeOptionType = 'CALL'; // Default to CALL
+    let instrumentStatusInterval = null;
+    let activeOrder = null; // For orders placed by the UI
+    let isOrderActive = false; // Flag for when an order is placed by the UI
+    let instrumentOrders = []; // For passively discovered orders
 
     // --- Helper Functions ---
     const logError = async (errorMessage) => {
@@ -244,8 +245,9 @@ document.addEventListener('DOMContentLoaded', () => {
             instrumentPayload = {
                 symbol: symbol,
                 strike: parseFloat(strike),
-                expiry: expiry,
-                option_type: activeOptionType // Now we send the active type
+                expiry: expiry
+                // Note: We don't send option_type, as the backend will match
+                // either a Call or a Put for the given instrument.
             };
         }
 
@@ -265,19 +267,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
+        if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
+
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
         if (symbol && strike && expiry) {
             fetchQuoteAndInstrumentPosition(true);
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
+
+            // Start the new instrument poller
+            pollInstrumentOrders();
+            instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
         }
         updateBackendWatchlist();
     };
 
-    const placeOrder = async (orderDetails) => {
+    const pollInstrumentOrders = async () => {
+        const symbol = symbolInput.value.trim().toUpperCase();
+        const strike = strikeInput.value;
+        const expiry = expiryInput.value;
+
+        if (!symbol || !strike || !expiry || !accountHash || isOrderActive) {
+            return; // Don't poll if inputs are empty or if we're actively tracking a just-placed order
+        }
+
         try {
-            // The new /api/order endpoint is only for placing orders.
+            const response = await fetch(`/api/get_instrument_orders?symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
+            const data = await response.json();
+            if (data.success) {
+                instrumentOrders = data.orders || [];
+                updateStatusDisplay();
+            } else {
+                setStatus(data.error || 'Status Error', true);
+            }
+        } catch (error) {
+            setStatus(`API Error polling orders: ${error.message}`, true);
+        }
+    };
+
+    const updateStatusDisplay = () => {
+        cancelBtn.disabled = instrumentOrders.length === 0 && !activeOrder;
+        if (instrumentOrders.length === 0 && !isOrderActive) {
+            setStatus('Idle');
+            return;
+        }
+
+        // Sort to ensure consistent display order: Puts first, then by ID
+        instrumentOrders.sort((a, b) => {
+            if (a.type === 'PUT' && b.type !== 'PUT') return -1;
+            if (a.type !== 'PUT' && b.type === 'PUT') return 1;
+            return a.order_id - b.order_id;
+        });
+
+        const statusHTML = instrumentOrders.map(order =>
+            `<span>${order.type} ${order.status} ${order.side} @ ${order.price.toFixed(2)}</span>`
+        ).join('<br>');
+
+        statusDisplay.innerHTML = statusHTML;
+    };
+
+    const placeOrder = async (orderDetails) => {
+        if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
+        try {
             const response = await fetch('/api/order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -292,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusPollInterval = setInterval(pollOrderStatus, 2000);
             } else {
                 setStatus(`Error: ${data.error || 'Unknown placement error'}`, true);
+                instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
             }
         } catch (error) {
             setStatus(`API Error placing order: ${error.message}`, true);
@@ -299,35 +352,104 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handleCancel = async () => {
-        if (!activeOrder || !accountHash) return;
-        try {
-            // Call the new dedicated cancel endpoint
-            const response = await fetch('/api/cancel_order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    account_id: activeOrder.account_id,
-                    order_id: activeOrder.orderId
-                })
-            });
-            const data = await response.json();
-            if (data.success) {
-                setStatus('Canceled');
-                if (statusPollInterval) clearInterval(statusPollInterval);
-                activeOrder = null;
-                isOrderActive = false;
-            } else {
-                 setStatus(`Cancel Error: ${data.error}`, true);
+        // This function now handles three cases:
+        // 1. A single order placed via the UI is active (`activeOrder`).
+        // 2. A single passively discovered order is active (`instrumentOrders`).
+        // 3. Multiple passively discovered orders are active.
+
+        const ordersToCancel = activeOrder ? [activeOrder] : instrumentOrders;
+
+        if (ordersToCancel.length === 0) {
+            setStatus("No active order to cancel.", true);
+            return;
+        }
+
+        if (ordersToCancel.length === 1) {
+            // Direct cancel if only one order
+            const order = ordersToCancel[0];
+            const accountId = order.account_id || accountHash; // Use account_id from order if available
+            const orderId = order.orderId || order.order_id; // Handle different key names
+
+            if (!accountId || !orderId) {
+                setStatus("Error: Missing account or order ID for cancellation.", true);
+                return;
             }
-        } catch(error) {
-            setStatus(`API Error canceling: ${error.message}`, true);
+
+            try {
+                const response = await fetch('/api/cancel_order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ account_id: accountId, order_id: orderId })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    setStatus('Canceled');
+                    if (activeOrder) { // If it was a UI-placed order, clear the state
+                        if (statusPollInterval) clearInterval(statusPollInterval);
+                        activeOrder = null;
+                        isOrderActive = false;
+                        instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
+                    }
+                    pollInstrumentOrders(); // Refresh status immediately
+                } else {
+                    setStatus(`Cancel Error: ${data.error}`, true);
+                }
+            } catch (error) {
+                setStatus(`API Error canceling: ${error.message}`, true);
+            }
+        } else {
+            // Show modal if there's a choice
+            showCancelModal(ordersToCancel);
         }
     };
 
+    const showCancelModal = (orders) => {
+        // Remove existing modal if any
+        const existingModal = document.querySelector('.modal-overlay');
+        if (existingModal) existingModal.remove();
+
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        // Create modal content
+        const content = document.createElement('div');
+        content.className = 'modal-content';
+        content.innerHTML = '<h3>Choose Order to Cancel</h3>';
+
+        orders.forEach(order => {
+            const choiceDiv = document.createElement('div');
+            choiceDiv.className = 'modal-order-choice';
+            choiceDiv.innerHTML = `
+                <strong>${order.type} ${order.side}</strong><br>
+                Status: ${order.status}<br>
+                Price: ${order.price.toFixed(2)}
+            `;
+            choiceDiv.addEventListener('click', () => {
+                // Fake an `activeOrder` object for the direct cancel logic
+                activeOrder = { orderId: order.order_id, account_id: order.account_id };
+                handleCancel(); // This will now see a single `activeOrder`
+                activeOrder = null; // Reset immediately after
+                overlay.remove(); // Close modal
+            });
+            content.appendChild(choiceDiv);
+        });
+
+        // Add a close button/area
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+            }
+        });
+
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+    };
+
+    // This poller is now only for orders placed via the UI
     const pollOrderStatus = async () => {
         if (!activeOrder) { if (statusPollInterval) clearInterval(statusPollInterval); return; }
         try {
-            // Poll the new order-specific status endpoint
             const response = await fetch(`/api/order_status/${activeOrder.orderId}`);
             const data = await response.json();
             if (data.success) {
@@ -339,23 +461,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     isOrderActive = false;
                     fetchPositions();
                     fetchRecentFills();
+                    // Handoff: Restart the passive poller
+                    instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
                 } else if (orderData.status === 'REPLACED') {
-                    const replacementResponse = await fetch('/api/find_replacement_order', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ account_hash: accountHash, original_order: activeOrder })
-                    });
-                    const replacementData = await replacementResponse.json();
-                    if (replacementData.success) {
-                        const newOrder = replacementData.replacement_order;
-                        activeOrder.orderId = newOrder.orderId;
-                        activeOrder.price = newOrder.price;
-                        setStatus(`REPLACED. New order ${newOrder.orderId}`);
-                    } else {
-                        const msg = `REPLACED, but error finding new: ${replacementData.error}`;
-                        setStatus(msg, true);
-                        if (statusPollInterval) clearInterval(statusPollInterval);
-                    }
+                    // Logic for handling replaced orders can be refined here
+                    setStatus('REPLACED - Manual handling required for now.');
+                    if (statusPollInterval) clearInterval(statusPollInterval);
                 }
             }
         } catch (error) {
@@ -371,28 +482,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 accountHash = data.account_hash;
                 enableControls(true);
                 setStatus('Idle');
-
-                // --- Event Listeners for Call/Put focus ---
-                const callControls = [
-                    document.querySelectorAll('.quote-group')[0],
-                    document.querySelectorAll('.order-box')[0],
-                    document.querySelectorAll('.order-box')[1]
-                ];
-                const putControls = [
-                    document.querySelectorAll('.quote-group')[1],
-                    document.querySelectorAll('.order-box')[2],
-                    document.querySelectorAll('.order-box')[3]
-                ];
-
-                const setActiveSection = (type) => {
-                    if (activeOptionType !== type) {
-                        activeOptionType = type;
-                        updateBackendWatchlist(); // Update watchlist on section change
-                    }
-                };
-
-                callControls.forEach(el => el.addEventListener('mouseenter', () => setActiveSection('CALL')));
-                putControls.forEach(el => el.addEventListener('mouseenter', () => setActiveSection('PUT')));
                 fetchRecentFills();
                 setInterval(fetchRecentFills, 30000);
                 setInterval(fetchPositions, 10000);
