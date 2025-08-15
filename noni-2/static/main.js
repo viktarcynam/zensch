@@ -24,12 +24,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const putPositionDisplay = document.getElementById('put-position-display');
     const cancelBtn = document.getElementById('cancel-btn');
     const fillsScroller = document.getElementById('fills-scroller');
+    const priceScroller = document.getElementById('price-scroller');
 
     // --- State Management ---
     let accountHash = null;
     let statusPollInterval = null;
     let quotePollInterval = null;
     let instrumentStatusInterval = null;
+    let pricePollInterval = null; // For the underlying price scroller
     let activeOrder = null; // For orders placed by the UI
     let isOrderActive = false; // Flag for when an order is placed by the UI
     let instrumentOrders = []; // For passively discovered orders
@@ -265,14 +267,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const pollUnderlyingPrice = async () => {
+        const symbol = symbolInput.value.trim().toUpperCase();
+        if (!symbol) return;
+
+        try {
+            const response = await fetch(`/api/defaults/${symbol}`);
+            const data = await response.json();
+            if (data.success && data.price) {
+                const priceDiv = document.createElement('div');
+                priceDiv.textContent = data.price.toFixed(2);
+                priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
+
+                // Limit the number of entries
+                while (priceScroller.children.length > 50) {
+                    priceScroller.removeChild(priceScroller.lastChild);
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching underlying price: ${error.message}`);
+        }
+    };
+
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
+        if (pricePollInterval) clearInterval(pricePollInterval); // Clear old price poller
+        priceScroller.innerHTML = ''; // Clear old prices
+
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
         if (symbol && strike && expiry) {
             fetchQuoteAndInstrumentPosition(true);
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
+        }
+
+        if (symbol) {
+            pollUnderlyingPrice(); // Poll once immediately
+            pricePollInterval = setInterval(pollUnderlyingPrice, 2500); // Poll every 2.5 seconds
         }
         updateBackendWatchlist();
     };
