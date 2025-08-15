@@ -92,33 +92,35 @@ def background_poller():
                     app.logger.warning(f"Poller failed to get positions for {primary_account_hash}")
 
                 # 2. Auto-discover externally placed orders
-                if INTERESTED_INSTRUMENTS:
-                    # Broaden the search to all orders in the last 24 hours for debugging
-                    from_time = datetime.now() - timedelta(days=1)
-                    all_orders_response = client.get_option_orders(
-                        account_id=primary_account_hash,
-                        from_entered_time=from_time.strftime('%Y-%m-%dT%H:%M:%SZ')
-                    )
 
-                    # Log the raw response to a file for analysis
-                    if all_orders_response.get('success'):
-                        try:
-                            with open("debug_working_orders.json", "w") as f:
-                                json.dump(all_orders_response.get('data', []), f, indent=2)
-                            app.logger.info("Successfully wrote all recent orders to debug_working_orders.json")
-                        except Exception as e:
-                            app.logger.error(f"Failed to write debug file: {e}")
+                # --- START AGGRESSIVE DEBUGGING BLOCK ---
+                # This block forces the order discovery to run on every poll, regardless of UI state.
+                app.logger.info(f"DEBUG: Polling for orders with account hash: {primary_account_hash}")
 
-                    # Also, for now, we continue to check the known active statuses
-                    all_active_orders = []
-                    for status in ['WORKING', 'PENDING_ACTIVATION']:
-                        response = client.get_option_orders(account_id=primary_account_hash, status=status)
-                        if response.get('success'):
-                            all_active_orders.extend(response.get('data', []))
+                all_active_orders = []
+                # Fetch orders with both statuses
+                for status in ['WORKING', 'PENDING_ACTIVATION']:
+                    response = client.get_option_orders(account_id=primary_account_hash, status=status)
+                    if response.get('success'):
+                        all_active_orders.extend(response.get('data', []))
 
-                    if all_active_orders:
-                        for order in all_active_orders:
-                            order_id = order.get('orderId')
+                # Log the combined list of found orders to the debug file.
+                try:
+                    debug_data = {
+                        "account_hash_used": primary_account_hash,
+                        "retrieved_orders": all_active_orders
+                    }
+                    with open("debug_working_orders.json", "w") as f:
+                        json.dump(debug_data, f, indent=2)
+                    app.logger.info(f"DEBUG: Wrote {len(all_active_orders)} active orders to debug_working_orders.json")
+                except Exception as e:
+                    app.logger.error(f"DEBUG: Failed to write debug file: {e}")
+                # --- END AGGRESSIVE DEBUGGING BLOCK ---
+
+                if all_active_orders:
+                    # This is the original logic, which we will now run on the fetched orders
+                    for order in all_active_orders:
+                        order_id = order.get('orderId')
                             if order_id in ACTIVE_ORDERS:
                                 continue # Already tracking this one
 
