@@ -509,6 +509,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    document.querySelectorAll('.price-adjust-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const button = e.currentTarget;
+            const targetInputId = button.dataset.target;
+            const amount = parseFloat(button.dataset.amount);
+            const targetInput = document.getElementById(targetInputId);
+
+            if (targetInput) {
+                const currentValue = parseFloat(targetInput.value) || 0;
+                const newValue = currentValue + amount;
+                targetInput.value = Math.max(0, newValue).toFixed(2);
+            }
+        });
+    });
+
     document.querySelectorAll('.order-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const [type, action] = e.target.id.split('-')[0];
