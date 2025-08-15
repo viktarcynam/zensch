@@ -14,6 +14,19 @@ from trading_utils import parse_option_symbol, get_nearest_strike, get_next_frid
 
 app = Flask(__name__)
 
+# --- Custom Logger Configuration ---
+import logging
+from logging.handlers import RotatingFileHandler
+
+# Set up a specific logger with our desired output level
+logger = logging.getLogger('noni2_logger')
+logger.setLevel(logging.DEBUG)
+
+# Add the log message handler to the logger
+handler = RotatingFileHandler('noni2_debug.log', maxBytes=100000, backupCount=1)
+handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(handler)
+
 # --- Thread-Safe State and Cache Management ---
 
 # ACTIVE_ORDERS stores the details of orders we are actively monitoring.
@@ -41,7 +54,7 @@ def background_poller():
     This function runs in a background thread and periodically fetches data
     from the Schwab API to keep the local cache fresh.
     """
-    app.logger.info("Background poller started.")
+    logger.info("Background poller started.")
     global FAST_MODE_UNTIL
 
     while True:
@@ -58,7 +71,7 @@ def background_poller():
                 # ensure fast mode is enabled for at least 30 seconds.
                 if is_active and not DATA_CACHE.get('was_active', False):
                     FAST_MODE_UNTIL = now + 30
-                    app.logger.info("Active order detected. Entering fast poll mode for 30s.")
+                    logger.info("Active order detected. Entering fast poll mode for 30s.")
 
                 DATA_CACHE['was_active'] = is_active
 
@@ -80,7 +93,7 @@ def background_poller():
                 # --- Main Polling Logic (Fast Mode) ---
                 primary_account_hash = DATA_CACHE.get('account_hashes', [{}])[0].get('hashValue')
                 if not primary_account_hash:
-                    app.logger.warning("Poller: No account hash available to fetch data.")
+                    logger.warning("Poller: No account hash available to fetch data.")
                     time.sleep(sleep_duration)
                     continue
 
@@ -89,7 +102,7 @@ def background_poller():
                 if positions_response.get('success'):
                     DATA_CACHE['positions'][primary_account_hash] = positions_response.get('data')
                 else:
-                    app.logger.warning(f"Poller failed to get positions for {primary_account_hash}")
+                    logger.warning(f"Poller failed to get positions for {primary_account_hash}")
 
                 # 2. Auto-discover externally placed orders
 
@@ -106,7 +119,7 @@ def background_poller():
                     if response.get('success'):
                         all_active_orders.extend(response.get('data', []))
                     else:
-                        app.logger.warning(f"Poller failed to get '{status}' orders for auto-discovery.")
+                        logger.warning(f"Poller failed to get '{status}' orders for auto-discovery.")
 
                 if all_active_orders:
                     # This is the original logic, which we will now run on the fetched orders
@@ -132,7 +145,7 @@ def background_poller():
                             parsed_details = parse_instrument_description(description)
 
                             if not parsed_details:
-                                app.logger.warning(f"Could not parse instrument description for auto-discovery: {description}")
+                                logger.warning(f"Could not parse instrument description for auto-discovery: {description}")
                                 continue
 
                             order_expiry = parsed_details['expiry']
@@ -146,7 +159,7 @@ def background_poller():
                                         abs(interested['strike'] - order_strike) < 0.001 and
                                         interested['expiry'] == order_expiry):
 
-                                        app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol} via description. Adding to active monitoring.")
+                                        logger.info(f"Auto-discovered external order {order_id} for {order_symbol} via description. Adding to active monitoring.")
                                         # Add it to ACTIVE_ORDERS so we can start tracking it
                                         ACTIVE_ORDERS[order_id] = {
                                             "account_id": primary_account_hash,
@@ -162,7 +175,7 @@ def background_poller():
                                         # Found a match, but we don't break, so we can discover
                                         # both a call and a put if they both have working orders.
                         except (KeyError, TypeError) as e:
-                            app.logger.error(f"Error processing discovered order {order_id}: {e}")
+                            logger.error(f"Error processing discovered order {order_id}: {e}")
                             continue # Move to the next order
 
                 # 3. Collect all unique symbols from active orders for quote fetching
@@ -178,7 +191,7 @@ def background_poller():
                                     symbol = parts[0]
                                     DATA_CACHE['quotes'][symbol] = quote_str # Store raw string for now
                         else:
-                            app.logger.warning(f"Poller failed to get quotes: {quotes_response.get('error')}")
+                            logger.warning(f"Poller failed to get quotes: {quotes_response.get('error')}")
 
                 # 4. Fetch status for each active order
                 # Make a copy of keys to avoid issues with dict size changing during iteration
@@ -193,7 +206,7 @@ def background_poller():
                         status = status_data.get('status')
 
                         if status == 'REPLACED':
-                            app.logger.info(f"Order {order_id} was REPLACED. Searching for its replacement...")
+                            logger.info(f"Order {order_id} was REPLACED. Searching for its replacement...")
                             # Standardize the original order's details for the search function
                             standardized_original_order = {
                                 "orderId": order_id,
@@ -203,11 +216,11 @@ def background_poller():
                                 "strike": order_details.get('strike_price') or order_details.get('strike'),
                                 "expiry": order_details.get('expiration_date') or order_details.get('expiry')
                             }
-                            replacement_order = find_replacement_order(client, order_details['account_id'], standardized_original_order, logger=app.logger)
+                            replacement_order = find_replacement_order(client, order_details['account_id'], standardized_original_order, logger=logger)
 
                             if replacement_order:
                                 new_order_id = replacement_order.get('orderId')
-                                app.logger.info(f"Found replacement order {new_order_id}. Updating active orders.")
+                                logger.info(f"Found replacement order {new_order_id}. Updating active orders.")
 
                                 # Create a new, standardized details object for the replacement
                                 new_leg = replacement_order.get('orderLegCollection', [{}])[0]
@@ -229,7 +242,7 @@ def background_poller():
 
                                 ACTIVE_ORDERS[new_order_id] = new_order_details
                             else:
-                                app.logger.warning(f"Could not find replacement for order {order_id}. It will be removed from tracking.")
+                                logger.warning(f"Could not find replacement for order {order_id}. It will be removed from tracking.")
 
                             # In either case, remove the old, replaced order
                             if order_id in ACTIVE_ORDERS: del ACTIVE_ORDERS[order_id]
@@ -237,11 +250,11 @@ def background_poller():
 
                         # If order is terminal, remove it from active monitoring
                         elif status in ['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED']:
-                            app.logger.info(f"Order {order_id} reached terminal state '{status}'. Removing from active polling.")
+                            logger.info(f"Order {order_id} reached terminal state '{status}'. Removing from active polling.")
                             if order_id in ACTIVE_ORDERS:
                                 del ACTIVE_ORDERS[order_id]
                     else:
-                        app.logger.warning(f"Poller failed to get status for order {order_id}")
+                        logger.warning(f"Poller failed to get status for order {order_id}")
 
         time.sleep(sleep_duration)
 
@@ -406,7 +419,7 @@ def handle_order():
                     # Add to active monitoring and trigger fast poll mode
                     ACTIVE_ORDERS[order_id] = details
                     FAST_MODE_UNTIL = time.time() + 30
-                app.logger.info(f"Placed order {order_id}. Added to active monitoring and triggered fast poll mode.")
+                logger.info(f"Placed order {order_id}. Added to active monitoring and triggered fast poll mode.")
                 return jsonify({"success": True, "order_id": order_id})
         return jsonify({"success": False, "error": response.get('error')}), 500
 
@@ -429,7 +442,7 @@ def cancel_order():
                 # Also remove from cache
                 if order_id in DATA_CACHE['order_statuses']:
                     del DATA_CACHE['order_statuses'][order_id]
-            app.logger.info(f"Canceled order {order_id}. Removed from active monitoring.")
+            logger.info(f"Canceled order {order_id}. Removed from active monitoring.")
             return jsonify({"success": True})
     return jsonify({"success": False, "error": response.get('error')}), 500
 
@@ -450,7 +463,7 @@ def get_order_status(order_id):
             return jsonify({"success": False, "error": "Order ID not being tracked or is invalid."}), 404
 
     with SchwabClient() as client:
-        app.logger.info(f"Cache miss for order {order_id}. Fetching directly.")
+        logger.info(f"Cache miss for order {order_id}. Fetching directly.")
         response = client.get_option_order_details(account_id=account_id, order_id=order_id)
         if response.get('success'):
             return jsonify({"success": True, "data": response.get('data', {})})
@@ -480,7 +493,7 @@ def find_replacement_order_api():
     }
 
     with SchwabClient() as client:
-        replacement = find_replacement_order(client, account_hash, standardized_order, logger=app.logger)
+        replacement = find_replacement_order(client, account_hash, standardized_order, logger=logger)
         if replacement:
             # When a replacement is found, we need to update our tracking
             new_order_id = replacement.get('orderId')
@@ -496,7 +509,7 @@ def find_replacement_order_api():
                     new_order_details['price'] = replacement.get('price')
                     ACTIVE_ORDERS[new_order_id] = new_order_details
                     FAST_MODE_UNTIL = time.time() + 30
-                    app.logger.info(f"Replaced order {standardized_order['orderId']} with {new_order_id}. Updating active polling and triggering fast mode.")
+                    logger.info(f"Replaced order {standardized_order['orderId']} with {new_order_id}. Updating active polling and triggering fast mode.")
             return jsonify({"success": True, "replacement_order": replacement})
 
     return jsonify({"success": False, "error": "Not found"}), 404
@@ -514,10 +527,10 @@ def set_interested_instrument():
     with CACHE_LOCK:
         if instrument:
             INTERESTED_INSTRUMENTS[section_id] = instrument
-            app.logger.info(f"Updated instrument of interest for section {section_id}: {instrument.get('symbol')}")
+            logger.info(f"Updated instrument of interest for section {section_id}: {instrument.get('symbol')}")
         elif section_id in INTERESTED_INSTRUMENTS:
             del INTERESTED_INSTRUMENTS[section_id]
-            app.logger.info(f"Cleared instrument of interest for section {section_id}")
+            logger.info(f"Cleared instrument of interest for section {section_id}")
 
     return jsonify({"success": True})
 
@@ -527,7 +540,7 @@ def trigger_fast_poll():
     global FAST_MODE_UNTIL
     with CACHE_LOCK:
         FAST_MODE_UNTIL = time.time() + 30
-    app.logger.info("Fast poll mode activated by frontend for 30 seconds.")
+    logger.info("Fast poll mode activated by frontend for 30 seconds.")
     return jsonify({"success": True, "message": "Fast poll mode activated for 30 seconds."})
 
 
@@ -535,7 +548,7 @@ def trigger_fast_poll():
 def log_error():
     data = request.get_json()
     if data and 'message' in data:
-        app.logger.error(f"Frontend Error: {data['message']}")
+        logger.error(f"Frontend Error: {data['message']}")
         return jsonify({"success": True})
     return jsonify({"success": False, "error": "Invalid log message"}), 400
 
@@ -555,7 +568,7 @@ def get_instrument_orders():
     strike_str = request.args.get('strike')
     expiry = request.args.get('expiry')
 
-    app.logger.debug(f"API_GET_ORDERS: Request for {symbol} {strike_str} {expiry}")
+    logger.debug(f"API_GET_ORDERS: Request for {symbol} {strike_str} {expiry}")
 
     if not all([symbol, strike_str, expiry]):
         return jsonify({"success": False, "error": "Missing params", "orders": []}), 400
@@ -568,19 +581,19 @@ def get_instrument_orders():
     found_orders = []
 
     with CACHE_LOCK:
-        app.logger.debug(f"API_GET_ORDERS: Checking {len(ACTIVE_ORDERS)} active orders. Cache: {json.dumps(ACTIVE_ORDERS)}")
+        logger.debug(f"API_GET_ORDERS: Checking {len(ACTIVE_ORDERS)} active orders. Cache: {json.dumps(ACTIVE_ORDERS)}")
         # Find all active orders that match the instrument
         for order_id, order_details in ACTIVE_ORDERS.items():
             details_strike = order_details.get('strike_price') or order_details.get('strike')
             details_expiry = order_details.get('expiration_date') or order_details.get('expiry')
 
-            app.logger.debug(f"API_GET_ORDERS: Comparing with order {order_id} -> S:{order_details.get('symbol')} K:{details_strike} E:{details_expiry}")
+            logger.debug(f"API_GET_ORDERS: Comparing with order {order_id} -> S:{order_details.get('symbol')} K:{details_strike} E:{details_expiry}")
 
             if (order_details.get('symbol').upper() == symbol.upper() and
                 details_strike == strike and
                 details_expiry == expiry):
 
-                app.logger.info(f"API_GET_ORDERS: Match found for order {order_id}. Adding to response.")
+                logger.info(f"API_GET_ORDERS: Match found for order {order_id}. Adding to response.")
                 status_data = DATA_CACHE.get('order_statuses', {}).get(order_id, {})
 
                 order_info = {
@@ -594,10 +607,10 @@ def get_instrument_orders():
                 }
                 found_orders.append(order_info)
             else:
-                app.logger.debug(f"API_GET_ORDERS: No match for order {order_id}.")
+                logger.debug(f"API_GET_ORDERS: No match for order {order_id}.")
 
 
-    app.logger.debug(f"API_GET_ORDERS: Returning {len(found_orders)} orders.")
+    logger.debug(f"API_GET_ORDERS: Returning {len(found_orders)} orders.")
     return jsonify({"success": True, "orders": found_orders})
 
 
