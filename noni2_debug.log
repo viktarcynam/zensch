@@ -1,0 +1,17 @@
+2025-08-15 11:14:13,608 - INFO - Background poller started.
+2025-08-15 11:14:13,753 - INFO - Background poller started.
+2025-08-15 11:14:17,520 - ERROR - Frontend Error: Error fetching options: NetworkError when attempting to fetch resource.
+2025-08-15 11:14:27,055 - INFO - Fast poll mode activated by frontend for 30 seconds.
+2025-08-15 11:14:28,007 - INFO - Updated instrument of interest for section section-1: HOG
+2025-08-15 11:14:32,607 - INFO - Updated instrument of interest for section section-1: HOG
+2025-08-15 11:14:35,416 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:14:37,551 - INFO - Active order detected. Entering fast poll mode for 30s.
+2025-08-15 11:14:38,714 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:14:42,213 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:14:45,353 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:14:48,624 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:14:52,139 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:14:54,877 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:14:58,268 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:15:01,260 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
+2025-08-15 11:15:05,540 - INFO - Auto-discovered external order 1003955222601 for HOG via description. Adding to active monitoring.
