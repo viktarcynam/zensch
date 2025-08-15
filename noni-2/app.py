@@ -135,14 +135,14 @@ def background_poller():
 
                             # Now, compare with our watchlist of interested instruments
                             for interested in INTERESTED_INSTRUMENTS.values():
-                            # Ensure all keys exist before comparing, now including option_type
-                            if all(k in interested for k in ['symbol', 'strike', 'expiry', 'option_type']):
+                                # Ensure all keys exist before comparing, now including option_type
+                                if all(k in interested for k in ['symbol', 'strike', 'expiry', 'option_type']):
                                     if (interested['symbol'].upper() == order_symbol and
-                                    interested['option_type'] == order_put_call and
+                                        interested['option_type'] == order_put_call and
                                         abs(interested['strike'] - order_strike) < 0.001 and
                                         interested['expiry'] == order_expiry):
 
-                                    app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol} ({order_put_call}). Adding to active monitoring.")
+                                        app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol} ({order_put_call}). Adding to active monitoring.")
                                         # Add it to ACTIVE_ORDERS so we can start tracking it
                                         ACTIVE_ORDERS[order_id] = {
                                             "account_id": primary_account_hash,
