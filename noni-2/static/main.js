@@ -24,17 +24,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const putPositionDisplay = document.getElementById('put-position-display');
     const cancelBtn = document.getElementById('cancel-btn');
     const fillsScroller = document.getElementById('fills-scroller');
+    const priceScroller = document.getElementById('price-scroller');
+    const errorLogContainer = document.getElementById('error-log-container');
+    const errorLogHeader = document.getElementById('error-log-header');
+    const errorLogContent = document.getElementById('error-log-content');
+    const errorLogToggleIcon = document.getElementById('error-log-toggle-icon');
 
     // --- State Management ---
     let accountHash = null;
-    let statusPollInterval = null;
     let quotePollInterval = null;
-    let activeOrder = null;
-    let isOrderActive = false;
+    let instrumentStatusInterval = null;
+    let pricePollInterval = null;
+    let instrumentOrders = []; // The single source of truth for active orders for the current instrument.
 
     // --- Helper Functions ---
+    const logErrorToUI = (message) => {
+        const now = new Date();
+        const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-log-message';
+        errorDiv.textContent = `[${timestamp}] ${message}`;
+        errorLogContent.insertBefore(errorDiv, errorLogContent.firstChild);
+        errorLogContainer.style.display = 'block'; // Make sure it's visible when an error occurs
+    };
+
     const logError = async (errorMessage) => {
-        console.error(errorMessage); // Keep logging to console
+        console.error(errorMessage);
+        logErrorToUI(errorMessage); // Log to our new UI element
         try {
             await fetch('/api/log_error', {
                 method: 'POST',
@@ -47,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const setStatus = (message, isError = false) => {
-        statusDisplay.textContent = message;
+        statusDisplay.innerHTML = message; // Use innerHTML to allow for <br> tags
         if (isError) {
             logError(message);
         }
@@ -71,13 +87,46 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success && data.fills) {
                 fillsScroller.innerHTML = '';
                 data.fills.forEach(fill => {
+                    // Calculate DTE on the frontend
+                    const expiryDate = new Date(fill.expiry + 'T00:00:00');
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const diffTime = expiryDate - today;
+                    const dte = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                    // Format the string on the frontend
+                    const fillString =
+                        `${fill.quantity > 0 ? '+' : ''}${fill.quantity} ${fill.putCall} ${fill.symbol} ` +
+                        `strk:${fill.strike} dte:${dte} ${fill.price.toFixed(2)}`;
+
                     const fillDiv = document.createElement('div');
-                    fillDiv.textContent = fill;
+                    fillDiv.textContent = fillString;
                     fillsScroller.appendChild(fillDiv);
                 });
             }
         } catch (error) {
             logError(`Error fetching recent fills: ${error.message}`);
+        }
+    };
+
+    const pollUnderlyingPrice = async () => {
+        const symbol = symbolInput.value.trim().toUpperCase();
+        if (!symbol) return;
+
+        try {
+            const response = await fetch(`/api/defaults/${symbol}`);
+            const data = await response.json();
+            if (data.success && data.price) {
+                const priceDiv = document.createElement('div');
+                priceDiv.textContent = data.price.toFixed(2);
+                priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
+
+                while (priceScroller.children.length > 50) {
+                    priceScroller.removeChild(priceScroller.lastChild);
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching underlying price: ${error.message}`);
         }
     };
 
@@ -106,51 +155,34 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/positions/${symbol}?account_hash=${accountHash}`);
             const data = await response.json();
 
-            positionDisplay.innerHTML = ''; // Clear previous content
+            positionDisplay.innerHTML = '';
 
             if (data.success && data.positions) {
                 if (data.positions.length === 0) {
                     positionDisplay.textContent = 'No Pos';
                     return;
                 }
-
-                // 1. Separate positions and calculate DTE for options
                 const stockPosition = data.positions.find(p => p.asset_type === 'EQUITY');
                 const options = data.positions.filter(p => p.asset_type === 'OPTION');
-
                 options.forEach(opt => {
                     const expiryDate = new Date(opt.expiry + 'T00:00:00');
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     const diffTime = expiryDate - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    opt.dte = diffDays >= 0 ? diffDays + 1 : 0; // Ensure DTE is not negative
+                    opt.dte = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
                 });
-
-                // 2. Sort option positions by DTE, then by strike
-                options.sort((a, b) => {
-                    if (a.dte !== b.dte) {
-                        return a.dte - b.dte;
-                    }
-                    return a.strike - b.strike;
-                });
-
+                options.sort((a, b) => (a.dte !== b.dte) ? a.dte - b.dte : a.strike - b.strike);
                 const callPositions = options.filter(p => p.put_call === 'CALL');
                 const putPositions = options.filter(p => p.put_call === 'PUT');
-
-                // 3. Handle stock position display
                 if (stockPosition) {
                     const stockDiv = document.createElement('div');
                     stockDiv.className = 'stock-position-line';
                     stockDiv.textContent = `STOCK: ${parseInt(stockPosition.quantity)} @${stockPosition.average_price.toFixed(2)}`;
                     positionDisplay.appendChild(stockDiv);
                 }
-
-                // 4. Build two-column layout for options
                 if (callPositions.length > 0 || putPositions.length > 0) {
                     const columnsContainer = document.createElement('div');
                     columnsContainer.className = 'option-columns-container';
-
                     const callColumn = document.createElement('div');
                     callColumn.className = 'position-column';
                     callPositions.forEach(pos => {
@@ -158,7 +190,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         posDiv.textContent = `${pos.quantity > 0 ? '+' : ''}${parseInt(pos.quantity)} C Strk:${pos.strike} dte:${pos.dte}`;
                         callColumn.appendChild(posDiv);
                     });
-
                     const putColumn = document.createElement('div');
                     putColumn.className = 'position-column';
                     putPositions.forEach(pos => {
@@ -166,7 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         posDiv.textContent = `${pos.quantity > 0 ? '+' : ''}${parseInt(pos.quantity)} P Strk:${pos.strike} dte:${pos.dte}`;
                         putColumn.appendChild(posDiv);
                     });
-
                     columnsContainer.appendChild(callColumn);
                     columnsContainer.appendChild(putColumn);
                     positionDisplay.appendChild(columnsContainer);
@@ -244,8 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 symbol: symbol,
                 strike: parseFloat(strike),
                 expiry: expiry
-                // Note: We don't send option_type, as the backend will match
-                // either a Call or a Put for the given instrument.
             };
         }
 
@@ -254,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    section_id: "section-1", // Hardcoded for the current single-section UI
+                    section_id: "section-1",
                     instrument: instrumentPayload
                 })
             });
@@ -263,33 +291,83 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const handleInputChange = () => {
-        if (quotePollInterval) clearInterval(quotePollInterval);
+    const pollInstrumentOrders = async () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
+        if (!symbol || !strike || !expiry || !accountHash) return;
+
+        try {
+            const response = await fetch(`/api/get_instrument_orders?symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
+            const data = await response.json();
+            if (data.success) {
+                instrumentOrders = data.orders || [];
+                updateStatusDisplay();
+            } else {
+                setStatus(data.error || 'Status Error', true);
+            }
+        } catch (error) {
+            setStatus(`API Error polling orders: ${error.message}`, true);
+        }
+    };
+
+    const updateStatusDisplay = () => {
+        cancelBtn.disabled = instrumentOrders.length === 0;
+
+        if (instrumentOrders.length === 0) {
+            setStatus('Idle');
+            return;
+        }
+
+        instrumentOrders.sort((a, b) => {
+            if (a.type === 'PUT' && b.type !== 'PUT') return -1;
+            if (a.type !== 'PUT' && b.type === 'PUT') return 1;
+            return a.order_id - b.order_id;
+        });
+
+        const statusHTML = instrumentOrders.map(order =>
+            `<span>${order.type} ${order.status} ${order.side} @ ${order.price ? order.price.toFixed(2) : 'N/A'}</span>`
+        ).join('<br>');
+
+        setStatus(statusHTML);
+    };
+
+    const handleInputChange = () => {
+        if (quotePollInterval) clearInterval(quotePollInterval);
+        if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
+        if (pricePollInterval) clearInterval(pricePollInterval);
+        priceScroller.innerHTML = '';
+
+        const symbol = symbolInput.value.trim().toUpperCase();
+        const strike = strikeInput.value;
+        const expiry = expiryInput.value;
+
+        if (symbol) {
+            pollUnderlyingPrice();
+            pricePollInterval = setInterval(pollUnderlyingPrice, 2500);
+        }
+
         if (symbol && strike && expiry) {
             fetchQuoteAndInstrumentPosition(true);
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
+            pollInstrumentOrders();
+            instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
         }
         updateBackendWatchlist();
     };
 
     const placeOrder = async (orderDetails) => {
+        setStatus(`Placing ${orderDetails.side}...`);
         try {
-            // The new /api/order endpoint is only for placing orders.
             const response = await fetch('/api/order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ order_details: orderDetails })
             });
             const data = await response.json();
-            if (data.success && data.order_id) {
-                isOrderActive = true;
-                activeOrder = { ...orderDetails, orderId: data.order_id };
-                setStatus(`Placed ${activeOrder.side} ${activeOrder.symbol}`);
-                if (statusPollInterval) clearInterval(statusPollInterval);
-                statusPollInterval = setInterval(pollOrderStatus, 2000);
+            if (data.success) {
+                setStatus('Placed. Waiting for status...');
+                pollInstrumentOrders(); // Refresh immediately to pick up the new order
             } else {
                 setStatus(`Error: ${data.error || 'Unknown placement error'}`, true);
             }
@@ -298,69 +376,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const handleCancel = async () => {
-        if (!activeOrder || !accountHash) return;
+    const handleCancel = async (orderToCancel) => {
+        if (!orderToCancel && instrumentOrders.length > 1) {
+            showCancelModal(instrumentOrders);
+            return;
+        }
+
+        const order = orderToCancel || instrumentOrders[0];
+        if (!order) {
+            setStatus("No active order to cancel.", true);
+            return;
+        }
+
+        const accountId = order.account_id || accountHash;
+        const orderId = order.order_id;
+
         try {
-            // Call the new dedicated cancel endpoint
             const response = await fetch('/api/cancel_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    account_id: activeOrder.account_id,
-                    order_id: activeOrder.orderId
-                })
+                body: JSON.stringify({ account_id: accountId, order_id: orderId })
             });
             const data = await response.json();
             if (data.success) {
-                setStatus('Canceled');
-                if (statusPollInterval) clearInterval(statusPollInterval);
-                activeOrder = null;
-                isOrderActive = false;
+                setStatus('Cancel Sent');
+                pollInstrumentOrders();
             } else {
-                 setStatus(`Cancel Error: ${data.error}`, true);
+                setStatus(`Cancel Error: ${data.error}`, true);
             }
-        } catch(error) {
+        } catch (error) {
             setStatus(`API Error canceling: ${error.message}`, true);
         }
     };
 
-    const pollOrderStatus = async () => {
-        if (!activeOrder) { if (statusPollInterval) clearInterval(statusPollInterval); return; }
-        try {
-            // Poll the new order-specific status endpoint
-            const response = await fetch(`/api/order_status/${activeOrder.orderId}`);
-            const data = await response.json();
-            if (data.success) {
-                const orderData = data.data;
-                setStatus(`${orderData.status} ${activeOrder.side}`);
-                if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(orderData.status)) {
-                    if (statusPollInterval) clearInterval(statusPollInterval);
-                    activeOrder = null;
-                    isOrderActive = false;
-                    fetchPositions();
-                    fetchRecentFills();
-                } else if (orderData.status === 'REPLACED') {
-                    const replacementResponse = await fetch('/api/find_replacement_order', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ account_hash: accountHash, original_order: activeOrder })
-                    });
-                    const replacementData = await replacementResponse.json();
-                    if (replacementData.success) {
-                        const newOrder = replacementData.replacement_order;
-                        activeOrder.orderId = newOrder.orderId;
-                        activeOrder.price = newOrder.price;
-                        setStatus(`REPLACED. New order ${newOrder.orderId}`);
-                    } else {
-                        const msg = `REPLACED, but error finding new: ${replacementData.error}`;
-                        setStatus(msg, true);
-                        if (statusPollInterval) clearInterval(statusPollInterval);
-                    }
-                }
-            }
-        } catch (error) {
-            logError(`Error polling status: ${error.message}`);
-        }
+    const showCancelModal = (orders) => {
+        const existingModal = document.querySelector('.modal-overlay');
+        if (existingModal) existingModal.remove();
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const content = document.createElement('div');
+        content.className = 'modal-content';
+        content.innerHTML = '<h3>Choose Order to Cancel</h3>';
+        orders.forEach(order => {
+            const choiceDiv = document.createElement('div');
+            choiceDiv.className = 'modal-order-choice';
+            choiceDiv.innerHTML = `<strong>${order.type} ${order.side}</strong><br>Status: ${order.status}`;
+            choiceDiv.addEventListener('click', () => {
+                handleCancel(order);
+                overlay.remove();
+            });
+            content.appendChild(choiceDiv);
+        });
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
     };
 
     const init = async () => {
@@ -374,27 +443,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchRecentFills();
                 setInterval(fetchRecentFills, 30000);
                 setInterval(fetchPositions, 10000);
-
-                // Heartbeat poller for state synchronization
-                setInterval(async () => {
-                    if (isOrderActive && activeOrder && activeOrder.orderId) {
-                        try {
-                            // Use the new order-specific endpoint for the heartbeat
-                            const res = await fetch(`/api/has_active_orders?order_id=${activeOrder.orderId}`);
-                            const syncData = await res.json();
-                            // If the backend says it's no longer tracking the order, reset the UI
-                            if (syncData.success && !syncData.has_active) {
-                                setStatus('Order cleared externally. Resetting.', true);
-                                if (statusPollInterval) clearInterval(statusPollInterval);
-                                activeOrder = null;
-                                isOrderActive = false;
-                            }
-                        } catch (e) {
-                            logError(`Heartbeat poll failed: ${e.message}`);
-                        }
-                    }
-                }, 30000); // Poll every 30 seconds
-
             } else {
                 setStatus(`Error: ${data.error}`, true);
             }
@@ -405,19 +453,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     symbolInput.addEventListener('change', fetchAndSetDefaults);
-    strikeInput.addEventListener('change', handleInputChange);
-    expiryInput.addEventListener('change', handleInputChange);
+    strikeInput.addEventListener('input', handleInputChange);
+    expiryInput.addEventListener('input', handleInputChange);
 
     useBtn.addEventListener('click', async () => {
-        // First, fetch the latest quotes immediately for the UI
         fetchQuoteAndInstrumentPosition(true);
-
-        // Then, tell the backend to enter fast poll mode
         try {
             await fetch('/api/trigger_fast_poll', { method: 'POST' });
         } catch (error) {
             logError(`Failed to trigger fast poll: ${error.message}`);
         }
+    });
+
+    document.querySelectorAll('.price-adjust-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const button = e.currentTarget;
+            const targetInputId = button.dataset.target;
+            const amount = parseFloat(button.dataset.amount);
+            const targetInput = document.getElementById(targetInputId);
+
+            if (targetInput) {
+                const currentValue = parseFloat(targetInput.value) || 0;
+                const newValue = currentValue + amount;
+                targetInput.value = Math.max(0, newValue).toFixed(2);
+            }
+        });
     });
 
     document.querySelectorAll('.order-btn').forEach(btn => {
@@ -469,7 +529,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    cancelBtn.addEventListener('click', handleCancel);
+    cancelBtn.addEventListener('click', () => handleCancel(null));
+
+    errorLogHeader.addEventListener('click', () => {
+        errorLogContainer.classList.toggle('collapsed');
+        const icon = errorLogToggleIcon;
+        if (errorLogContainer.classList.contains('collapsed')) {
+            icon.textContent = '[+]';
+        } else {
+            icon.textContent = '[-]';
+        }
+    });
 
     // --- Start the app ---
     init();
