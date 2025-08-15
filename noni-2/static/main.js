@@ -28,17 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- State Management ---
     let accountHash = null;
-    let statusPollInterval = null;
     let quotePollInterval = null;
     let instrumentStatusInterval = null;
-    let pricePollInterval = null; // For the underlying price scroller
-    let activeOrder = null; // For orders placed by the UI
-    let isOrderActive = false; // Flag for when an order is placed by the UI
-    let instrumentOrders = []; // For passively discovered orders
+    let pricePollInterval = null;
+    let instrumentOrders = []; // The single source of truth for active orders for the current instrument.
 
     // --- Helper Functions ---
     const logError = async (errorMessage) => {
-        console.error(errorMessage); // Keep logging to console
+        console.error(errorMessage);
         try {
             await fetch('/api/log_error', {
                 method: 'POST',
@@ -51,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const setStatus = (message, isError = false) => {
-        statusDisplay.textContent = message;
+        statusDisplay.innerHTML = message; // Use innerHTML to allow for <br> tags
         if (isError) {
             logError(message);
         }
@@ -85,6 +82,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const pollUnderlyingPrice = async () => {
+        const symbol = symbolInput.value.trim().toUpperCase();
+        if (!symbol) return;
+
+        try {
+            const response = await fetch(`/api/defaults/${symbol}`);
+            const data = await response.json();
+            if (data.success && data.price) {
+                const priceDiv = document.createElement('div');
+                priceDiv.textContent = data.price.toFixed(2);
+                priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
+
+                while (priceScroller.children.length > 50) {
+                    priceScroller.removeChild(priceScroller.lastChild);
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching underlying price: ${error.message}`);
+        }
+    };
+
     const fetchAndSetDefaults = async () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         if (!symbol) return;
@@ -110,51 +128,34 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/positions/${symbol}?account_hash=${accountHash}`);
             const data = await response.json();
 
-            positionDisplay.innerHTML = ''; // Clear previous content
+            positionDisplay.innerHTML = '';
 
             if (data.success && data.positions) {
                 if (data.positions.length === 0) {
                     positionDisplay.textContent = 'No Pos';
                     return;
                 }
-
-                // 1. Separate positions and calculate DTE for options
                 const stockPosition = data.positions.find(p => p.asset_type === 'EQUITY');
                 const options = data.positions.filter(p => p.asset_type === 'OPTION');
-
                 options.forEach(opt => {
                     const expiryDate = new Date(opt.expiry + 'T00:00:00');
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     const diffTime = expiryDate - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    opt.dte = diffDays >= 0 ? diffDays + 1 : 0; // Ensure DTE is not negative
+                    opt.dte = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
                 });
-
-                // 2. Sort option positions by DTE, then by strike
-                options.sort((a, b) => {
-                    if (a.dte !== b.dte) {
-                        return a.dte - b.dte;
-                    }
-                    return a.strike - b.strike;
-                });
-
+                options.sort((a, b) => (a.dte !== b.dte) ? a.dte - b.dte : a.strike - b.strike);
                 const callPositions = options.filter(p => p.put_call === 'CALL');
                 const putPositions = options.filter(p => p.put_call === 'PUT');
-
-                // 3. Handle stock position display
                 if (stockPosition) {
                     const stockDiv = document.createElement('div');
                     stockDiv.className = 'stock-position-line';
                     stockDiv.textContent = `STOCK: ${parseInt(stockPosition.quantity)} @${stockPosition.average_price.toFixed(2)}`;
                     positionDisplay.appendChild(stockDiv);
                 }
-
-                // 4. Build two-column layout for options
                 if (callPositions.length > 0 || putPositions.length > 0) {
                     const columnsContainer = document.createElement('div');
                     columnsContainer.className = 'option-columns-container';
-
                     const callColumn = document.createElement('div');
                     callColumn.className = 'position-column';
                     callPositions.forEach(pos => {
@@ -162,7 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         posDiv.textContent = `${pos.quantity > 0 ? '+' : ''}${parseInt(pos.quantity)} C Strk:${pos.strike} dte:${pos.dte}`;
                         callColumn.appendChild(posDiv);
                     });
-
                     const putColumn = document.createElement('div');
                     putColumn.className = 'position-column';
                     putPositions.forEach(pos => {
@@ -170,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         posDiv.textContent = `${pos.quantity > 0 ? '+' : ''}${parseInt(pos.quantity)} P Strk:${pos.strike} dte:${pos.dte}`;
                         putColumn.appendChild(posDiv);
                     });
-
                     columnsContainer.appendChild(callColumn);
                     columnsContainer.appendChild(putColumn);
                     positionDisplay.appendChild(columnsContainer);
@@ -248,8 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 symbol: symbol,
                 strike: parseFloat(strike),
                 expiry: expiry
-                // Note: We don't send option_type, as the backend will match
-                // either a Call or a Put for the given instrument.
             };
         }
 
@@ -258,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    section_id: "section-1", // Hardcoded for the current single-section UI
+                    section_id: "section-1",
                     instrument: instrumentPayload
                 })
             });
@@ -267,62 +264,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const pollUnderlyingPrice = async () => {
-        const symbol = symbolInput.value.trim().toUpperCase();
-        if (!symbol) return;
-
-        try {
-            const response = await fetch(`/api/defaults/${symbol}`);
-            const data = await response.json();
-            if (data.success && data.price) {
-                const priceDiv = document.createElement('div');
-                priceDiv.textContent = data.price.toFixed(2);
-                priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
-
-                // Limit the number of entries
-                while (priceScroller.children.length > 50) {
-                    priceScroller.removeChild(priceScroller.lastChild);
-                }
-            }
-        } catch (error) {
-            console.error(`Error fetching underlying price: ${error.message}`);
-        }
-    };
-
-    const handleInputChange = () => {
-        if (quotePollInterval) clearInterval(quotePollInterval);
-        if (pricePollInterval) clearInterval(pricePollInterval); // Clear old price poller
-        priceScroller.innerHTML = ''; // Clear old prices
-
-        const symbol = symbolInput.value.trim().toUpperCase();
-        const strike = strikeInput.value;
-        const expiry = expiryInput.value;
-        if (symbol && strike && expiry) {
-            fetchQuoteAndInstrumentPosition(true);
-            quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
-        }
-
-        if (symbol) {
-            pollUnderlyingPrice(); // Poll once immediately
-            pricePollInterval = setInterval(pollUnderlyingPrice, 2500); // Poll every 2.5 seconds
-        }
-        updateBackendWatchlist();
-    };
-
     const pollInstrumentOrders = async () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
-
         if (!symbol || !strike || !expiry || !accountHash) return;
-
-        // If a UI-placed order is being tracked, let its dedicated poller handle the status.
-        // But we still update the main display with the full list.
-        if (isOrderActive) {
-            // We can just update the display here without polling if we want to avoid flicker
-            updateStatusDisplay();
-            return;
-        }
 
         try {
             const response = await fetch(`/api/get_instrument_orders?symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
@@ -339,43 +285,52 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateStatusDisplay = () => {
-        cancelBtn.disabled = (instrumentOrders.length === 0 && !activeOrder);
+        cancelBtn.disabled = instrumentOrders.length === 0;
 
-        let statusHTML = '';
-
-        if (instrumentOrders.length > 0) {
-             // Sort to ensure consistent display order: Puts first, then by ID
-            instrumentOrders.sort((a, b) => {
-                if (a.type === 'PUT' && b.type !== 'PUT') return -1;
-                if (a.type !== 'PUT' && b.type === 'PUT') return 1;
-                return a.order_id - b.order_id;
-            });
-
-            statusHTML = instrumentOrders.map(order =>
-                `<span>${order.type} ${order.status} ${order.side} @ ${order.price ? order.price.toFixed(2) : 'N/A'}</span>`
-            ).join('<br>');
+        if (instrumentOrders.length === 0) {
+            setStatus('Idle');
+            return;
         }
 
-        // If a UI-placed order is active, its status takes precedence
-        if (isOrderActive && activeOrder) {
-            // Prepend the active order's status to the list
-            const activeStatus = `> ${activeOrder.status || 'PENDING'} ${activeOrder.side}`;
-            statusHTML = statusHTML ? `${activeStatus}<br>${statusHTML}` : activeStatus;
+        instrumentOrders.sort((a, b) => {
+            if (a.type === 'PUT' && b.type !== 'PUT') return -1;
+            if (a.type !== 'PUT' && b.type === 'PUT') return 1;
+            return a.order_id - b.order_id;
+        });
+
+        const statusHTML = instrumentOrders.map(order =>
+            `<span>${order.type} ${order.status} ${order.side} @ ${order.price ? order.price.toFixed(2) : 'N/A'}</span>`
+        ).join('<br>');
+
+        setStatus(statusHTML);
+    };
+
+    const handleInputChange = () => {
+        if (quotePollInterval) clearInterval(quotePollInterval);
+        if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
+        if (pricePollInterval) clearInterval(pricePollInterval);
+        priceScroller.innerHTML = '';
+
+        const symbol = symbolInput.value.trim().toUpperCase();
+        const strike = strikeInput.value;
+        const expiry = expiryInput.value;
+
+        if (symbol) {
+            pollUnderlyingPrice();
+            pricePollInterval = setInterval(pollUnderlyingPrice, 2500);
         }
 
-        if (!statusHTML) {
-            statusDisplay.innerHTML = 'Idle';
-        } else {
-            statusDisplay.innerHTML = statusHTML;
+        if (symbol && strike && expiry) {
+            fetchQuoteAndInstrumentPosition(true);
+            quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
+            pollInstrumentOrders();
+            instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
         }
+        updateBackendWatchlist();
     };
 
     const placeOrder = async (orderDetails) => {
-        if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
-        isOrderActive = true; // Set flag to indicate a UI-placed order is in flight
-        activeOrder = { ...orderDetails, status: 'PENDING' }; // Set a temporary pending status
-        updateStatusDisplay(); // Update display immediately
-
+        setStatus(`Placing ${orderDetails.side}...`);
         try {
             const response = await fetch('/api/order', {
                 method: 'POST',
@@ -384,19 +339,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await response.json();
             if (data.success && data.order_id) {
-                activeOrder.orderId = data.order_id;
-                if (statusPollInterval) clearInterval(statusPollInterval);
-                statusPollInterval = setInterval(pollOrderStatus, 2000); // Start dedicated poller
+                setStatus('Placed. Waiting for status...');
+                pollInstrumentOrders(); // Refresh immediately to pick up the new order
             } else {
                 setStatus(`Error: ${data.error || 'Unknown placement error'}`, true);
-                isOrderActive = false;
-                activeOrder = null;
-                instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
             }
         } catch (error) {
             setStatus(`API Error placing order: ${error.message}`, true);
-            isOrderActive = false;
-            activeOrder = null;
         }
     };
 
@@ -406,14 +355,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const order = orderToCancel || instrumentOrders[0] || activeOrder;
+        const order = orderToCancel || instrumentOrders[0];
         if (!order) {
             setStatus("No active order to cancel.", true);
             return;
         }
 
         const accountId = order.account_id || accountHash;
-        const orderId = order.orderId || order.order_id;
+        const orderId = order.order_id;
 
         try {
             const response = await fetch('/api/cancel_order', {
@@ -424,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.success) {
                 setStatus('Cancel Sent');
-                pollInstrumentOrders(); // Refresh status immediately
+                pollInstrumentOrders();
             } else {
                 setStatus(`Cancel Error: ${data.error}`, true);
             }
@@ -456,34 +405,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(overlay);
     };
 
-    // This poller is now ONLY for the life of an order placed via the UI
-    const pollOrderStatus = async () => {
-        if (!activeOrder || !activeOrder.orderId) return;
-        try {
-            const response = await fetch(`/api/order_status/${activeOrder.orderId}`);
-            const data = await response.json();
-            if (data.success) {
-                activeOrder.status = data.data.status;
-                if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(activeOrder.status)) {
-                    if (statusPollInterval) clearInterval(statusPollInterval);
-                    isOrderActive = false;
-                    activeOrder = null;
-                    fetchPositions();
-                    fetchRecentFills();
-                    pollInstrumentOrders(); // Do a final refresh
-                    instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
-                }
-            } else {
-                logError(`Could not poll active order: ${data.error}`);
-                if (statusPollInterval) clearInterval(statusPollInterval);
-                isOrderActive = false;
-                activeOrder = null;
-            }
-        } catch (error) {
-            logError(`Error polling active order: ${error.message}`);
-        }
-    };
-
     const init = async () => {
         try {
             const response = await fetch('/api/accounts');
@@ -495,27 +416,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchRecentFills();
                 setInterval(fetchRecentFills, 30000);
                 setInterval(fetchPositions, 10000);
-
-                // Heartbeat poller for state synchronization
-                setInterval(async () => {
-                    if (isOrderActive && activeOrder && activeOrder.orderId) {
-                        try {
-                            // Use the new order-specific endpoint for the heartbeat
-                            const res = await fetch(`/api/has_active_orders?order_id=${activeOrder.orderId}`);
-                            const syncData = await res.json();
-                            // If the backend says it's no longer tracking the order, reset the UI
-                            if (syncData.success && !syncData.has_active) {
-                                setStatus('Order cleared externally. Resetting.', true);
-                                if (statusPollInterval) clearInterval(statusPollInterval);
-                                activeOrder = null;
-                                isOrderActive = false;
-                            }
-                        } catch (e) {
-                            logError(`Heartbeat poll failed: ${e.message}`);
-                        }
-                    }
-                }, 30000); // Poll every 30 seconds
-
             } else {
                 setStatus(`Error: ${data.error}`, true);
             }
@@ -530,10 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
     expiryInput.addEventListener('input', handleInputChange);
 
     useBtn.addEventListener('click', async () => {
-        // First, fetch the latest quotes immediately for the UI
         fetchQuoteAndInstrumentPosition(true);
-
-        // Then, tell the backend to enter fast poll mode
         try {
             await fetch('/api/trigger_fast_poll', { method: 'POST' });
         } catch (error) {
@@ -605,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    cancelBtn.addEventListener('click', handleCancel);
+    cancelBtn.addEventListener('click', () => handleCancel(null));
 
     // --- Start the app ---
     init();

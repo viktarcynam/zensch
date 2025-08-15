@@ -92,6 +92,8 @@ def background_poller():
                     app.logger.warning(f"Poller failed to get positions for {primary_account_hash}")
 
                 # 2. Auto-discover externally placed orders
+
+                # 2. Auto-discover externally placed orders
                 all_active_orders = []
                 # Fetch orders with both 'WORKING' and 'PENDING_ACTIVATION' statuses
                 from_time = (datetime.now() - timedelta(days=30)).isoformat() + "Z"
@@ -549,27 +551,6 @@ def has_active_orders():
 
 @app.route('/api/get_instrument_orders', methods=['GET'])
 def get_instrument_orders():
-    # --- START OF DIAGNOSTIC TEST ---
-    # This is a temporary test to isolate the bug.
-    # It ignores the request parameters and tries to return the HOG order directly.
-    with CACHE_LOCK:
-        hog_order_id = 1003955222601  # Hardcoded from logs
-        if hog_order_id in ACTIVE_ORDERS:
-            app.logger.info(f"DIAGNOSTIC: HOG order {hog_order_id} is in ACTIVE_ORDERS. Forcing return.")
-            order_details = ACTIVE_ORDERS[hog_order_id]
-            status_data = DATA_CACHE.get('order_statuses', {}).get(hog_order_id, {})
-            order_info = {
-                "order_id": hog_order_id,
-                "account_id": order_details.get('account_id'),
-                "type": "PUT",
-                "status": status_data.get('status', 'DIAGNOSTIC_TEST'),
-                "side": "SELL_TO_CLOSE",
-                "quantity": 1,
-                "price": order_details.get('price')
-            }
-            return jsonify({"success": True, "orders": [order_info]})
-    # --- END OF DIAGNOSTIC TEST ---
-
     symbol = request.args.get('symbol')
     strike_str = request.args.get('strike')
     expiry = request.args.get('expiry')
