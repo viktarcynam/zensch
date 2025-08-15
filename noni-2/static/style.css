@@ -82,10 +82,12 @@ input:focus {
 .position-display {
     flex-grow: 1;
     text-align: left;
-    padding-left: 10px;
+    padding: 4px 8px; /* Add some padding */
     background-color: #2b2b2b;
     min-height: 18px;
     border-radius: 4px;
+    font-size: 0.75rem; /* Reduce font size significantly */
+    line-height: 1.4; /* Adjust line height for readability */
 }
 .strike-input {
     width: 100px;

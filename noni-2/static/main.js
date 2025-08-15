@@ -105,7 +105,17 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`/api/positions/${symbol}?account_hash=${accountHash}`);
             const data = await response.json();
-            positionDisplay.textContent = data.success ? data.display_text : 'Pos Error';
+
+            positionDisplay.innerHTML = ''; // Clear previous content
+            if (data.success && data.positions) {
+                data.positions.forEach(posString => {
+                    const posDiv = document.createElement('div');
+                    posDiv.textContent = posString;
+                    positionDisplay.appendChild(posDiv);
+                });
+            } else {
+                positionDisplay.textContent = 'Pos Error';
+            }
         } catch (error) {
             logError(`Error fetching positions: ${error.message}`);
             positionDisplay.textContent = 'Pos Error';

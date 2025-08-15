@@ -218,33 +218,56 @@ def get_positions(symbol):
     account_hash = request.args.get('account_hash')
     if not account_hash: return jsonify({"success": False, "error": "Account hash required."}), 400
 
-    # Bypassing the cache for this endpoint to use the reliable, pre-filtered API call.
     with SchwabClient() as client:
         positions_response = client.get_positions_by_symbol(symbol=symbol.upper(), account_hash=account_hash)
 
-    if positions_response.get('success') and positions_response.get('data'):
-        position_strings = []
-        accounts = positions_response.get('data', {}).get('accounts', [])
-        for acc in accounts:
-            for pos in acc.get('positions', []):
-                asset_type = pos.get('assetType')
-                qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
-                if qty == 0:
-                    continue
+    if not (positions_response.get('success') and positions_response.get('data')):
+        return jsonify({"success": False, "error": "Failed to retrieve positions via API."}), 500
 
-                if asset_type == 'EQUITY':
-                    position_strings.append(f"STOCK: {int(qty)}")
-                elif asset_type == 'OPTION':
-                    details = parse_option_position_details(pos)
-                    if details:
-                        price_str = f" @{details.get('price'):.2f}" if details.get('price') is not None else ""
-                        position_strings.append(f"{details['quantity']:+g} {details['put_call']} Strk:{details['strike']}{price_str}")
+    stock_positions = []
+    option_positions = []
 
-        if not position_strings:
-            return jsonify({"success": True, "display_text": "No Pos"})
-        return jsonify({"success": True, "display_text": " | ".join(position_strings)})
+    accounts = positions_response.get('data', {}).get('accounts', [])
+    for acc in accounts:
+        for pos in acc.get('positions', []):
+            asset_type = pos.get('assetType')
+            qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
+            if qty == 0:
+                continue
 
-    return jsonify({"success": False, "error": "Failed to retrieve positions via API."}), 500
+            if asset_type == 'EQUITY':
+                stock_positions.append(f"STOCK: {int(qty)}")
+            elif asset_type == 'OPTION':
+                details = parse_option_position_details(pos)
+                if details:
+                    try:
+                        expiry_date = datetime.strptime(details['expiry'], '%Y-%m-%d')
+                        # Add 1 to be inclusive of the expiration day
+                        dte = (expiry_date - datetime.now()).days + 1
+                        details['dte'] = dte if dte >= 0 else 0
+                        option_positions.append(details)
+                    except (ValueError, TypeError):
+                        continue # Skip if expiry date is malformed
+
+    # Sort the option positions by DTE in ascending order
+    option_positions.sort(key=lambda x: x.get('dte', float('inf')))
+
+    # Format the sorted option positions into strings
+    formatted_options = []
+    for opt in option_positions:
+        put_call_abbr = opt['put_call'][0] if opt.get('put_call') else '?'
+        price_str = f" @{opt.get('price'):.2f}" if opt.get('price') is not None else ""
+        formatted_options.append(
+            f"{opt.get('quantity', 0):+g} {put_call_abbr} Strk:{opt.get('strike', 0)}{price_str} dte:{opt.get('dte', 'N/A')}"
+        )
+
+    # Combine stock (always first) and sorted options
+    final_positions = stock_positions + formatted_options
+
+    if not final_positions:
+        return jsonify({"success": True, "positions": ["No Pos"]})
+
+    return jsonify({"success": True, "positions": final_positions})
 
 
 @app.route('/api/recent_fills', methods=['GET'])
