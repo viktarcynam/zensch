@@ -77,9 +77,21 @@ def background_poller():
                     continue
 
                 # --- Main Polling Logic (Fast Mode) ---
-                # 1. Auto-discover externally placed orders
-                if DATA_CACHE.get('account_hashes') and INTERESTED_INSTRUMENTS:
-                    primary_account_hash = DATA_CACHE['account_hashes'][0].get('hashValue')
+                primary_account_hash = DATA_CACHE.get('account_hashes', [{}])[0].get('hashValue')
+                if not primary_account_hash:
+                    app.logger.warning("Poller: No account hash available to fetch data.")
+                    time.sleep(sleep_duration)
+                    continue
+
+                # 1. Always fetch positions for the primary account
+                positions_response = client.get_positions(account_hash=primary_account_hash)
+                if positions_response.get('success'):
+                    DATA_CACHE['positions'][primary_account_hash] = positions_response.get('data')
+                else:
+                    app.logger.warning(f"Poller failed to get positions for {primary_account_hash}")
+
+                # 2. Auto-discover externally placed orders
+                if INTERESTED_INSTRUMENTS:
                     working_orders_response = client.get_option_orders(account_id=primary_account_hash, status='WORKING')
                     if working_orders_response.get('success'):
                         for order in working_orders_response.get('data', []):
@@ -124,33 +136,22 @@ def background_poller():
                             except (ValueError, IndexError, TypeError):
                                 continue # Could not parse this order's description
 
-                # 2. Collect all unique symbols and account hashes from active orders (now including discovered ones)
-                symbols_to_poll = set(order['symbol'] for order in ACTIVE_ORDERS.values())
-                account_hashes_to_poll = set(order['account_id'] for order in ACTIVE_ORDERS.values())
+                # 3. Collect all unique symbols from active orders for quote fetching
+                if ACTIVE_ORDERS:
+                    symbols_to_poll = set(order['symbol'] for order in ACTIVE_ORDERS.values())
+                    if symbols_to_poll:
+                        quotes_response = client.get_quotes(symbols=list(symbols_to_poll))
+                        if quotes_response.get('success') and quotes_response.get('data'):
+                            # Assuming get_quotes returns a list of strings
+                            for quote_str in quotes_response['data']:
+                                parts = quote_str.split()
+                                if len(parts) > 1:
+                                    symbol = parts[0]
+                                    DATA_CACHE['quotes'][symbol] = quote_str # Store raw string for now
+                        else:
+                            app.logger.warning(f"Poller failed to get quotes: {quotes_response.get('error')}")
 
-                # 3. Bulk fetch quotes for all unique symbols
-                if symbols_to_poll:
-                    quotes_response = client.get_quotes(symbols=list(symbols_to_poll))
-                    if quotes_response.get('success') and quotes_response.get('data'):
-                        # Assuming get_quotes returns a list of strings
-                        for quote_str in quotes_response['data']:
-                            parts = quote_str.split()
-                            if len(parts) > 1:
-                                symbol = parts[0]
-                                DATA_CACHE['quotes'][symbol] = quote_str # Store raw string for now
-                    else:
-                        app.logger.warning(f"Poller failed to get quotes: {quotes_response.get('error')}")
-
-
-                # 4. Fetch positions for each account
-                for acc_hash in account_hashes_to_poll:
-                    positions_response = client.get_positions(account_hash=acc_hash)
-                    if positions_response.get('success'):
-                        DATA_CACHE['positions'][acc_hash] = positions_response.get('data')
-                    else:
-                        app.logger.warning(f"Poller failed to get positions for {acc_hash}")
-
-                # 5. Fetch status for each active order
+                # 4. Fetch status for each active order
                 # Make a copy of keys to avoid issues with dict size changing during iteration
                 for order_id, order_details in list(ACTIVE_ORDERS.items()):
                     status_response = client.get_option_order_details(
