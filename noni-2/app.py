@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 import time
 import threading
+import json
 
 # Add the parent directory to the Python path to import the client
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -94,6 +95,13 @@ def background_poller():
                 if INTERESTED_INSTRUMENTS:
                     working_orders_response = client.get_option_orders(account_id=primary_account_hash, status='WORKING')
                     if working_orders_response.get('success'):
+                        try:
+                            with open("debug_working_orders.json", "w") as f:
+                                json.dump(working_orders_response.get('data', []), f, indent=2)
+                            app.logger.info("Successfully wrote debug_working_orders.json")
+                        except Exception as e:
+                            app.logger.error(f"Failed to write debug file: {e}")
+
                         for order in working_orders_response.get('data', []):
                             order_id = order.get('orderId')
                             if order_id in ACTIVE_ORDERS:
