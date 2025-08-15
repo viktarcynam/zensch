@@ -226,14 +226,26 @@ def get_positions(symbol):
         accounts = positions_data.get('accounts', [])
         for acc in accounts:
             for pos in acc.get('positions', []):
-                # Filter for the specific symbol
-                if pos.get('instrument', {}).get('underlyingSymbol', '').upper() != symbol.upper():
+                instrument = pos.get('instrument', {})
+                asset_type = instrument.get('assetType')
+
+                # Determine the symbol to check based on the asset type
+                symbol_to_check = ''
+                if asset_type == 'EQUITY':
+                    symbol_to_check = instrument.get('symbol', '')
+                elif asset_type == 'OPTION':
+                    symbol_to_check = instrument.get('underlyingSymbol', '')
+
+                # Now, perform the filter
+                if symbol_to_check.upper() != symbol.upper():
                     continue
+
                 qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
                 if qty == 0: continue
-                if pos.get('assetType') == 'EQUITY':
+
+                if asset_type == 'EQUITY':
                     position_strings.append(f"STOCK: {int(qty)}")
-                elif pos.get('assetType') == 'OPTION':
+                elif asset_type == 'OPTION':
                     details = parse_option_position_details(pos)
                     if details:
                         price_str = f" @{details.get('price'):.2f}" if details.get('price') is not None else ""
