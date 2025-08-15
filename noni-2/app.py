@@ -185,9 +185,54 @@ def background_poller():
                     if status_response.get('success'):
                         status_data = status_response.get('data', {})
                         DATA_CACHE['order_statuses'][order_id] = status_data
+                        status = status_data.get('status')
+
+                        if status == 'REPLACED':
+                            app.logger.info(f"Order {order_id} was REPLACED. Searching for its replacement...")
+                            # Standardize the original order's details for the search function
+                            standardized_original_order = {
+                                "orderId": order_id,
+                                "symbol": order_details.get('symbol'),
+                                "putCall": order_details.get('option_type') or order_details.get('putCall'),
+                                "instruction": order_details.get('side'),
+                                "strike": order_details.get('strike_price') or order_details.get('strike'),
+                                "expiry": order_details.get('expiration_date') or order_details.get('expiry')
+                            }
+                            replacement_order = find_replacement_order(client, order_details['account_id'], standardized_original_order, logger=app.logger)
+
+                            if replacement_order:
+                                new_order_id = replacement_order.get('orderId')
+                                app.logger.info(f"Found replacement order {new_order_id}. Updating active orders.")
+
+                                # Create a new, standardized details object for the replacement
+                                new_leg = replacement_order.get('orderLegCollection', [{}])[0]
+                                new_instrument = new_leg.get('instrument', {})
+                                new_order_details = {
+                                    "account_id": order_details.get('account_id'),
+                                    "symbol": new_instrument.get('underlyingSymbol'),
+                                    "side": new_leg.get('instruction'),
+                                    "quantity": new_leg.get('quantity'),
+                                    "order_type": replacement_order.get('orderType'),
+                                    "price": replacement_order.get('price')
+                                }
+                                # Get option details from the reliable instrument symbol
+                                parsed_symbol = parse_option_symbol(new_instrument.get('symbol'))
+                                if parsed_symbol:
+                                    new_order_details['option_type'] = parsed_symbol.get('put_call')
+                                    new_order_details['expiration_date'] = parsed_symbol.get('expiry_date')
+                                    new_order_details['strike_price'] = parsed_symbol.get('strike')
+
+                                ACTIVE_ORDERS[new_order_id] = new_order_details
+                            else:
+                                app.logger.warning(f"Could not find replacement for order {order_id}. It will be removed from tracking.")
+
+                            # In either case, remove the old, replaced order
+                            if order_id in ACTIVE_ORDERS: del ACTIVE_ORDERS[order_id]
+                            if order_id in DATA_CACHE['order_statuses']: del DATA_CACHE['order_statuses'][order_id]
+
                         # If order is terminal, remove it from active monitoring
-                        if status_data.get('status') in ['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED']:
-                            app.logger.info(f"Order {order_id} reached terminal state '{status_data.get('status')}'. Removing from active polling.")
+                        elif status in ['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED']:
+                            app.logger.info(f"Order {order_id} reached terminal state '{status}'. Removing from active polling.")
                             if order_id in ACTIVE_ORDERS:
                                 del ACTIVE_ORDERS[order_id]
                     else:

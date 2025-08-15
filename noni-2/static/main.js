@@ -267,18 +267,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
-        if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
-
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
         if (symbol && strike && expiry) {
             fetchQuoteAndInstrumentPosition(true);
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
-
-            // Start the new instrument poller
-            pollInstrumentOrders();
-            instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
         }
         updateBackendWatchlist();
     };
@@ -288,8 +282,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
 
-        if (!symbol || !strike || !expiry || !accountHash || isOrderActive) {
-            return; // Don't poll if inputs are empty or if we're actively tracking a just-placed order
+        if (!symbol || !strike || !expiry || !accountHash) return;
+
+        // If a UI-placed order is being tracked, let its dedicated poller handle the status.
+        // But we still update the main display with the full list.
+        if (isOrderActive) {
+            // We can just update the display here without polling if we want to avoid flicker
+            updateStatusDisplay();
+            return;
         }
 
         try {
@@ -307,28 +307,43 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateStatusDisplay = () => {
-        cancelBtn.disabled = instrumentOrders.length === 0 && !activeOrder;
-        if (instrumentOrders.length === 0 && !isOrderActive) {
-            setStatus('Idle');
-            return;
+        cancelBtn.disabled = (instrumentOrders.length === 0 && !activeOrder);
+
+        let statusHTML = '';
+
+        if (instrumentOrders.length > 0) {
+             // Sort to ensure consistent display order: Puts first, then by ID
+            instrumentOrders.sort((a, b) => {
+                if (a.type === 'PUT' && b.type !== 'PUT') return -1;
+                if (a.type !== 'PUT' && b.type === 'PUT') return 1;
+                return a.order_id - b.order_id;
+            });
+
+            statusHTML = instrumentOrders.map(order =>
+                `<span>${order.type} ${order.status} ${order.side} @ ${order.price ? order.price.toFixed(2) : 'N/A'}</span>`
+            ).join('<br>');
         }
 
-        // Sort to ensure consistent display order: Puts first, then by ID
-        instrumentOrders.sort((a, b) => {
-            if (a.type === 'PUT' && b.type !== 'PUT') return -1;
-            if (a.type !== 'PUT' && b.type === 'PUT') return 1;
-            return a.order_id - b.order_id;
-        });
+        // If a UI-placed order is active, its status takes precedence
+        if (isOrderActive && activeOrder) {
+            // Prepend the active order's status to the list
+            const activeStatus = `> ${activeOrder.status || 'PENDING'} ${activeOrder.side}`;
+            statusHTML = statusHTML ? `${activeStatus}<br>${statusHTML}` : activeStatus;
+        }
 
-        const statusHTML = instrumentOrders.map(order =>
-            `<span>${order.type} ${order.status} ${order.side} @ ${order.price.toFixed(2)}</span>`
-        ).join('<br>');
-
-        statusDisplay.innerHTML = statusHTML;
+        if (!statusHTML) {
+            statusDisplay.innerHTML = 'Idle';
+        } else {
+            statusDisplay.innerHTML = statusHTML;
+        }
     };
 
     const placeOrder = async (orderDetails) => {
         if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
+        isOrderActive = true; // Set flag to indicate a UI-placed order is in flight
+        activeOrder = { ...orderDetails, status: 'PENDING' }; // Set a temporary pending status
+        updateStatusDisplay(); // Update display immediately
+
         try {
             const response = await fetch('/api/order', {
                 method: 'POST',
@@ -337,140 +352,103 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await response.json();
             if (data.success && data.order_id) {
-                isOrderActive = true;
-                activeOrder = { ...orderDetails, orderId: data.order_id };
-                setStatus(`Placed ${activeOrder.side} ${activeOrder.symbol}`);
+                activeOrder.orderId = data.order_id;
                 if (statusPollInterval) clearInterval(statusPollInterval);
-                statusPollInterval = setInterval(pollOrderStatus, 2000);
+                statusPollInterval = setInterval(pollOrderStatus, 2000); // Start dedicated poller
             } else {
                 setStatus(`Error: ${data.error || 'Unknown placement error'}`, true);
+                isOrderActive = false;
+                activeOrder = null;
                 instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
             }
         } catch (error) {
             setStatus(`API Error placing order: ${error.message}`, true);
+            isOrderActive = false;
+            activeOrder = null;
         }
     };
 
-    const handleCancel = async () => {
-        // This function now handles three cases:
-        // 1. A single order placed via the UI is active (`activeOrder`).
-        // 2. A single passively discovered order is active (`instrumentOrders`).
-        // 3. Multiple passively discovered orders are active.
+    const handleCancel = async (orderToCancel) => {
+        if (!orderToCancel && instrumentOrders.length > 1) {
+            showCancelModal(instrumentOrders);
+            return;
+        }
 
-        const ordersToCancel = activeOrder ? [activeOrder] : instrumentOrders;
-
-        if (ordersToCancel.length === 0) {
+        const order = orderToCancel || instrumentOrders[0] || activeOrder;
+        if (!order) {
             setStatus("No active order to cancel.", true);
             return;
         }
 
-        if (ordersToCancel.length === 1) {
-            // Direct cancel if only one order
-            const order = ordersToCancel[0];
-            const accountId = order.account_id || accountHash; // Use account_id from order if available
-            const orderId = order.orderId || order.order_id; // Handle different key names
+        const accountId = order.account_id || accountHash;
+        const orderId = order.orderId || order.order_id;
 
-            if (!accountId || !orderId) {
-                setStatus("Error: Missing account or order ID for cancellation.", true);
-                return;
+        try {
+            const response = await fetch('/api/cancel_order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ account_id: accountId, order_id: orderId })
+            });
+            const data = await response.json();
+            if (data.success) {
+                setStatus('Cancel Sent');
+                pollInstrumentOrders(); // Refresh status immediately
+            } else {
+                setStatus(`Cancel Error: ${data.error}`, true);
             }
-
-            try {
-                const response = await fetch('/api/cancel_order', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ account_id: accountId, order_id: orderId })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    setStatus('Canceled');
-                    if (activeOrder) { // If it was a UI-placed order, clear the state
-                        if (statusPollInterval) clearInterval(statusPollInterval);
-                        activeOrder = null;
-                        isOrderActive = false;
-                        instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
-                    }
-                    pollInstrumentOrders(); // Refresh status immediately
-                } else {
-                    setStatus(`Cancel Error: ${data.error}`, true);
-                }
-            } catch (error) {
-                setStatus(`API Error canceling: ${error.message}`, true);
-            }
-        } else {
-            // Show modal if there's a choice
-            showCancelModal(ordersToCancel);
+        } catch (error) {
+            setStatus(`API Error canceling: ${error.message}`, true);
         }
     };
 
     const showCancelModal = (orders) => {
-        // Remove existing modal if any
         const existingModal = document.querySelector('.modal-overlay');
         if (existingModal) existingModal.remove();
-
-        // Create modal overlay
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
-
-        // Create modal content
         const content = document.createElement('div');
         content.className = 'modal-content';
         content.innerHTML = '<h3>Choose Order to Cancel</h3>';
-
         orders.forEach(order => {
             const choiceDiv = document.createElement('div');
             choiceDiv.className = 'modal-order-choice';
-            choiceDiv.innerHTML = `
-                <strong>${order.type} ${order.side}</strong><br>
-                Status: ${order.status}<br>
-                Price: ${order.price.toFixed(2)}
-            `;
+            choiceDiv.innerHTML = `<strong>${order.type} ${order.side}</strong><br>Status: ${order.status}`;
             choiceDiv.addEventListener('click', () => {
-                // Fake an `activeOrder` object for the direct cancel logic
-                activeOrder = { orderId: order.order_id, account_id: order.account_id };
-                handleCancel(); // This will now see a single `activeOrder`
-                activeOrder = null; // Reset immediately after
-                overlay.remove(); // Close modal
+                handleCancel(order);
+                overlay.remove();
             });
             content.appendChild(choiceDiv);
         });
-
-        // Add a close button/area
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                overlay.remove();
-            }
-        });
-
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         overlay.appendChild(content);
         document.body.appendChild(overlay);
     };
 
-    // This poller is now only for orders placed via the UI
+    // This poller is now ONLY for the life of an order placed via the UI
     const pollOrderStatus = async () => {
-        if (!activeOrder) { if (statusPollInterval) clearInterval(statusPollInterval); return; }
+        if (!activeOrder || !activeOrder.orderId) return;
         try {
             const response = await fetch(`/api/order_status/${activeOrder.orderId}`);
             const data = await response.json();
             if (data.success) {
-                const orderData = data.data;
-                setStatus(`${orderData.status} ${activeOrder.side}`);
-                if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(orderData.status)) {
+                activeOrder.status = data.data.status;
+                if (['FILLED', 'CANCELED', 'EXPIRED', 'REJECTED'].includes(activeOrder.status)) {
                     if (statusPollInterval) clearInterval(statusPollInterval);
-                    activeOrder = null;
                     isOrderActive = false;
+                    activeOrder = null;
                     fetchPositions();
                     fetchRecentFills();
-                    // Handoff: Restart the passive poller
+                    pollInstrumentOrders(); // Do a final refresh
                     instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
-                } else if (orderData.status === 'REPLACED') {
-                    // Logic for handling replaced orders can be refined here
-                    setStatus('REPLACED - Manual handling required for now.');
-                    if (statusPollInterval) clearInterval(statusPollInterval);
                 }
+            } else {
+                logError(`Could not poll active order: ${data.error}`);
+                if (statusPollInterval) clearInterval(statusPollInterval);
+                isOrderActive = false;
+                activeOrder = null;
             }
         } catch (error) {
-            logError(`Error polling status: ${error.message}`);
+            logError(`Error polling active order: ${error.message}`);
         }
     };
 
