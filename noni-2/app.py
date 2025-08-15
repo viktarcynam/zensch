@@ -189,9 +189,26 @@ def get_recent_fills():
             for order in orders_response.get('data', []):
                 try:
                     leg = order['orderLegCollection'][0]
+                    instrument = leg.get('instrument', {})
                     activity = order['orderActivityCollection'][0]['executionLegs'][0]
-                    fills_strings.append(f"{leg['quantity']:+g}{leg['instrument']['putCall'][0]} {leg['instrument']['underlyingSymbol']} {activity['price']:.2f}")
-                except (IndexError, KeyError):
+
+                    parsed_symbol = parse_option_symbol(instrument.get('symbol'))
+                    if not parsed_symbol:
+                        continue
+
+                    strike = parsed_symbol.get('strike')
+                    expiry_date_str = parsed_symbol.get('expiry_date')
+
+                    expiry_date_obj = datetime.strptime(expiry_date_str, '%Y-%m-%d')
+                    dte = (expiry_date_obj.date() - datetime.now().date()).days
+
+                    fill_string = (
+                        f"{leg['quantity']:+g} {instrument.get('putCall', ' ')[0]} {instrument.get('underlyingSymbol')} "
+                        f"strk:{strike} dte:{dte} {activity['price']:.2f}"
+                    )
+                    fills_strings.append(fill_string)
+                except (IndexError, KeyError, TypeError, ValueError) as e:
+                    app.logger.error(f"Error parsing recent fill: {e} - Order: {order}")
                     continue
             return jsonify({"success": True, "fills": fills_strings})
     return jsonify({"success": False, "error": "Could not retrieve recent fills."}), 500
