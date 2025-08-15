@@ -105,7 +105,75 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`/api/positions/${symbol}?account_hash=${accountHash}`);
             const data = await response.json();
-            positionDisplay.textContent = data.success ? data.display_text : 'Pos Error';
+
+            positionDisplay.innerHTML = ''; // Clear previous content
+
+            if (data.success && data.positions) {
+                if (data.positions.length === 0) {
+                    positionDisplay.textContent = 'No Pos';
+                    return;
+                }
+
+                // 1. Separate positions and calculate DTE for options
+                const stockPosition = data.positions.find(p => p.asset_type === 'EQUITY');
+                const options = data.positions.filter(p => p.asset_type === 'OPTION');
+
+                options.forEach(opt => {
+                    const expiryDate = new Date(opt.expiry + 'T00:00:00');
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const diffTime = expiryDate - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    opt.dte = diffDays >= 0 ? diffDays + 1 : 0; // Ensure DTE is not negative
+                });
+
+                // 2. Sort option positions by DTE, then by strike
+                options.sort((a, b) => {
+                    if (a.dte !== b.dte) {
+                        return a.dte - b.dte;
+                    }
+                    return a.strike - b.strike;
+                });
+
+                const callPositions = options.filter(p => p.put_call === 'CALL');
+                const putPositions = options.filter(p => p.put_call === 'PUT');
+
+                // 3. Handle stock position display
+                if (stockPosition) {
+                    const stockDiv = document.createElement('div');
+                    stockDiv.className = 'stock-position-line';
+                    stockDiv.textContent = `STOCK: ${parseInt(stockPosition.quantity)} @${stockPosition.average_price.toFixed(2)}`;
+                    positionDisplay.appendChild(stockDiv);
+                }
+
+                // 4. Build two-column layout for options
+                if (callPositions.length > 0 || putPositions.length > 0) {
+                    const columnsContainer = document.createElement('div');
+                    columnsContainer.className = 'option-columns-container';
+
+                    const callColumn = document.createElement('div');
+                    callColumn.className = 'position-column';
+                    callPositions.forEach(pos => {
+                        const posDiv = document.createElement('div');
+                        posDiv.textContent = `${pos.quantity > 0 ? '+' : ''}${parseInt(pos.quantity)} C Strk:${pos.strike} dte:${pos.dte}`;
+                        callColumn.appendChild(posDiv);
+                    });
+
+                    const putColumn = document.createElement('div');
+                    putColumn.className = 'position-column';
+                    putPositions.forEach(pos => {
+                        const posDiv = document.createElement('div');
+                        posDiv.textContent = `${pos.quantity > 0 ? '+' : ''}${parseInt(pos.quantity)} P Strk:${pos.strike} dte:${pos.dte}`;
+                        putColumn.appendChild(posDiv);
+                    });
+
+                    columnsContainer.appendChild(callColumn);
+                    columnsContainer.appendChild(putColumn);
+                    positionDisplay.appendChild(columnsContainer);
+                }
+            } else {
+                positionDisplay.textContent = data.error || 'Pos Error';
+            }
         } catch (error) {
             logError(`Error fetching positions: ${error.message}`);
             positionDisplay.textContent = 'Pos Error';
@@ -165,6 +233,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const updateBackendWatchlist = async () => {
+        const symbol = symbolInput.value.trim().toUpperCase();
+        const strike = strikeInput.value;
+        const expiry = expiryInput.value;
+
+        let instrumentPayload = null;
+        if (symbol && strike && expiry) {
+            instrumentPayload = {
+                symbol: symbol,
+                strike: parseFloat(strike),
+                expiry: expiry
+                // Note: We don't send option_type, as the backend will match
+                // either a Call or a Put for the given instrument.
+            };
+        }
+
+        try {
+            await fetch('/api/set_interested_instrument', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    section_id: "section-1", // Hardcoded for the current single-section UI
+                    instrument: instrumentPayload
+                })
+            });
+        } catch (error) {
+            logError(`Failed to update backend watchlist: ${error.message}`);
+        }
+    };
+
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
         const symbol = symbolInput.value.trim().toUpperCase();
@@ -174,24 +272,26 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchQuoteAndInstrumentPosition(true);
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
         }
+        updateBackendWatchlist();
     };
 
     const placeOrder = async (orderDetails) => {
         try {
+            // The new /api/order endpoint is only for placing orders.
             const response = await fetch('/api/order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'place', order_details: orderDetails })
+                body: JSON.stringify({ order_details: orderDetails })
             });
             const data = await response.json();
-            if (data.success) {
+            if (data.success && data.order_id) {
                 isOrderActive = true;
                 activeOrder = { ...orderDetails, orderId: data.order_id };
                 setStatus(`Placed ${activeOrder.side} ${activeOrder.symbol}`);
                 if (statusPollInterval) clearInterval(statusPollInterval);
                 statusPollInterval = setInterval(pollOrderStatus, 2000);
             } else {
-                setStatus(`Error: ${data.error}`, true);
+                setStatus(`Error: ${data.error || 'Unknown placement error'}`, true);
             }
         } catch (error) {
             setStatus(`API Error placing order: ${error.message}`, true);
@@ -201,10 +301,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleCancel = async () => {
         if (!activeOrder || !accountHash) return;
         try {
-            const response = await fetch('/api/order', {
+            // Call the new dedicated cancel endpoint
+            const response = await fetch('/api/cancel_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'cancel' })
+                body: JSON.stringify({
+                    account_id: activeOrder.account_id,
+                    order_id: activeOrder.orderId
+                })
             });
             const data = await response.json();
             if (data.success) {
@@ -223,7 +327,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pollOrderStatus = async () => {
         if (!activeOrder) { if (statusPollInterval) clearInterval(statusPollInterval); return; }
         try {
-            const response = await fetch('/api/order_status');
+            // Poll the new order-specific status endpoint
+            const response = await fetch(`/api/order_status/${activeOrder.orderId}`);
             const data = await response.json();
             if (data.success) {
                 const orderData = data.data;
@@ -272,13 +377,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Heartbeat poller for state synchronization
                 setInterval(async () => {
-                    const symbol = symbolInput.value.trim().toUpperCase();
-                    const strike = strikeInput.value;
-                    const expiry = expiryInput.value;
-                    if (isOrderActive && accountHash && symbol && strike && expiry) {
+                    if (isOrderActive && activeOrder && activeOrder.orderId) {
                         try {
-                            const res = await fetch(`/api/has_active_orders?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
+                            // Use the new order-specific endpoint for the heartbeat
+                            const res = await fetch(`/api/has_active_orders?order_id=${activeOrder.orderId}`);
                             const syncData = await res.json();
+                            // If the backend says it's no longer tracking the order, reset the UI
                             if (syncData.success && !syncData.has_active) {
                                 setStatus('Order cleared externally. Resetting.', true);
                                 if (statusPollInterval) clearInterval(statusPollInterval);
@@ -303,7 +407,18 @@ document.addEventListener('DOMContentLoaded', () => {
     symbolInput.addEventListener('change', fetchAndSetDefaults);
     strikeInput.addEventListener('change', handleInputChange);
     expiryInput.addEventListener('change', handleInputChange);
-    useBtn.addEventListener('click', () => fetchQuoteAndInstrumentPosition(true));
+
+    useBtn.addEventListener('click', async () => {
+        // First, fetch the latest quotes immediately for the UI
+        fetchQuoteAndInstrumentPosition(true);
+
+        // Then, tell the backend to enter fast poll mode
+        try {
+            await fetch('/api/trigger_fast_poll', { method: 'POST' });
+        } catch (error) {
+            logError(`Failed to trigger fast poll: ${error.message}`);
+        }
+    });
 
     document.querySelectorAll('.order-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
