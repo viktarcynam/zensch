@@ -218,31 +218,16 @@ def get_positions(symbol):
     account_hash = request.args.get('account_hash')
     if not account_hash: return jsonify({"success": False, "error": "Account hash required."}), 400
 
-    with CACHE_LOCK:
-        positions_data = DATA_CACHE.get('positions', {}).get(account_hash)
+    # Bypassing the cache for this endpoint to use the reliable, pre-filtered API call.
+    with SchwabClient() as client:
+        positions_response = client.get_positions_by_symbol(symbol=symbol.upper(), account_hash=account_hash)
 
-    if positions_data:
+    if positions_response.get('success') and positions_response.get('data'):
         position_strings = []
-        accounts = positions_data.get('accounts', [])
+        accounts = positions_response.get('data', {}).get('accounts', [])
         for acc in accounts:
             for pos in acc.get('positions', []):
-                instrument = pos.get('instrument', {})
-                asset_type = instrument.get('assetType')
-                symbol_to_check = ''
-
-                if asset_type == 'EQUITY':
-                    symbol_to_check = instrument.get('symbol', '')
-                elif asset_type == 'OPTION':
-                    # For options, the most reliable way to get the underlying symbol
-                    # is to parse the description string.
-                    description = instrument.get('description', '')
-                    if description:
-                        symbol_to_check = description.split(' ')[0]
-
-                # Now, perform the filter
-                if symbol_to_check.upper() != symbol.upper():
-                    continue
-
+                asset_type = pos.get('instrument', {}).get('assetType')
                 qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
                 if qty == 0:
                     continue
@@ -254,10 +239,12 @@ def get_positions(symbol):
                     if details:
                         price_str = f" @{details.get('price'):.2f}" if details.get('price') is not None else ""
                         position_strings.append(f"{details['quantity']:+g} {details['put_call']} Strk:{details['strike']}{price_str}")
-        if not position_strings: return jsonify({"success": True, "display_text": "No Pos"})
+
+        if not position_strings:
+            return jsonify({"success": True, "display_text": "No Pos"})
         return jsonify({"success": True, "display_text": " | ".join(position_strings)})
 
-    return jsonify({"success": False, "error": "Position data not yet in cache."}), 404
+    return jsonify({"success": False, "error": "Failed to retrieve positions via API."}), 500
 
 
 @app.route('/api/recent_fills', methods=['GET'])
@@ -300,12 +287,13 @@ def get_instrument_position():
     if not all([account_hash, symbol, strike, expiry]):
         return jsonify({"success": False, "error": "Missing params"}), 400
 
-    with CACHE_LOCK:
-        positions_data = DATA_CACHE.get('positions', {}).get(account_hash)
+    # Bypassing the cache to use the reliable, pre-filtered API call. This avoids cross-instrument data contamination.
+    with SchwabClient() as client:
+        positions_response = client.get_positions_by_symbol(symbol=symbol.upper(), account_hash=account_hash)
 
-    if positions_data:
+    if positions_response.get('success') and positions_response.get('data'):
         call_qty, put_qty = 0, 0
-        accounts = positions_data.get('accounts', [])
+        accounts = positions_response.get('data', {}).get('accounts', [])
         for acc in accounts:
             for pos in acc.get('positions', []):
                 details = parse_option_position_details(pos)
@@ -316,7 +304,7 @@ def get_instrument_position():
                         put_qty = details.get('quantity', 0)
         return jsonify({"success": True, "call_quantity": call_qty, "put_quantity": put_qty})
 
-    return jsonify({"success": False, "error": "Position data not yet in cache."}), 404
+    return jsonify({"success": False, "error": "Failed to retrieve instrument position via API."}), 500
 
 
 @app.route('/api/order', methods=['POST'])
