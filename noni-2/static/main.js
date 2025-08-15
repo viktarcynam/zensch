@@ -526,8 +526,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     symbolInput.addEventListener('change', fetchAndSetDefaults);
-    strikeInput.addEventListener('change', handleInputChange);
-    expiryInput.addEventListener('change', handleInputChange);
+    strikeInput.addEventListener('input', handleInputChange);
+    expiryInput.addEventListener('input', handleInputChange);
 
     useBtn.addEventListener('click', async () => {
         // First, fetch the latest quotes immediately for the UI

@@ -14,24 +14,6 @@ from trading_utils import parse_option_symbol, get_nearest_strike, get_next_frid
 
 app = Flask(__name__)
 
-# --- Logging Configuration ---
-import logging
-from logging.handlers import RotatingFileHandler
-
-# Configure a rotating file handler
-handler = RotatingFileHandler('noni2_debug.log', maxBytes=100000, backupCount=3)
-handler.setLevel(logging.DEBUG) # Capture all levels of logs
-
-# Create a formatter and set it for the handler
-formatter = logging.Formatter(
-    '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-)
-handler.setFormatter(formatter)
-
-# Add the handler to the app's logger
-app.logger.addHandler(handler)
-app.logger.setLevel(logging.DEBUG) # Set the app's logger level to DEBUG
-
 # --- Thread-Safe State and Cache Management ---
 
 # ACTIVE_ORDERS stores the details of orders we are actively monitoring.
@@ -126,11 +108,7 @@ def background_poller():
                     else:
                         app.logger.warning(f"Poller failed to get '{status}' orders for auto-discovery.")
 
-                if INTERESTED_INSTRUMENTS:
-                    app.logger.debug(f"Discovery: Interested instruments: {json.dumps(INTERESTED_INSTRUMENTS)}")
-
                 if all_active_orders:
-                    app.logger.debug(f"Discovery: Found {len(all_active_orders)} active orders raw data: {json.dumps(all_active_orders)}")
                     # This is the original logic, which we will now run on the fetched orders
                     for order in all_active_orders:
                         order_id = order.get('orderId')
@@ -150,37 +128,24 @@ def background_poller():
                             if not description:
                                 continue
 
-                            app.logger.debug(f"Discovery: Processing order {order_id} for {order_symbol} ('{description}')")
-
                             # Use the new, reliable description parser
                             parsed_details = parse_instrument_description(description)
 
                             if not parsed_details:
-                                app.logger.warning(f"Discovery: Could not parse description: '{description}'")
+                                app.logger.warning(f"Could not parse instrument description for auto-discovery: {description}")
                                 continue
 
                             order_expiry = parsed_details['expiry']
                             order_strike = parsed_details['strike']
-                            app.logger.debug(f"Discovery: Parsed Order {order_id} -> Symbol={order_symbol}, Strike={order_strike}, Expiry={order_expiry}")
 
                             # Now, compare with our watchlist of interested instruments
                             for interested in INTERESTED_INSTRUMENTS.values():
                                 # Ensure all keys exist before comparing
                                 if all(k in interested for k in ['symbol', 'strike', 'expiry']):
-                                    is_symbol_match = interested['symbol'].upper() == order_symbol.upper()
-                                    is_strike_match = abs(interested['strike'] - order_strike) < 0.001
-                                    is_expiry_match = interested['expiry'] == order_expiry
+                                    if (interested['symbol'].upper() == order_symbol and
+                                        abs(interested['strike'] - order_strike) < 0.001 and
+                                        interested['expiry'] == order_expiry):
 
-                                    if is_symbol_match and is_strike_match and is_expiry_match:
-                                        app.logger.info(f"Discovery: MATCH FOUND for order {order_id}. Adding to active monitoring.")
-                                    elif interested['symbol'].upper() == order_symbol.upper():
-                                        # Log details only if the symbol matches but other parts don't, to reduce noise
-                                        app.logger.debug(f"  - Mismatch Details for Order {order_id}:")
-                                        app.logger.debug(f"    Interested: K={interested['strike']}, E={interested['expiry']}")
-                                        app.logger.debug(f"    Discovered: K={order_strike}, E={order_expiry}")
-                                        app.logger.debug(f"    Matches: Strike={is_strike_match}, Expiry={is_expiry_match}")
-
-                                    if (is_symbol_match and is_strike_match and is_expiry_match):
                                         app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol} via description. Adding to active monitoring.")
                                         # Add it to ACTIVE_ORDERS so we can start tracking it
                                         ACTIVE_ORDERS[order_id] = {
