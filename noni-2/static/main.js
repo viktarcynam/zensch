@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let quotePollInterval = null;
     let activeOrder = null;
     let isOrderActive = false;
+    let activeOptionType = 'CALL'; // Default to CALL
 
     // --- Helper Functions ---
     const logError = async (errorMessage) => {
@@ -243,9 +244,8 @@ document.addEventListener('DOMContentLoaded', () => {
             instrumentPayload = {
                 symbol: symbol,
                 strike: parseFloat(strike),
-                expiry: expiry
-                // Note: We don't send option_type, as the backend will match
-                // either a Call or a Put for the given instrument.
+                expiry: expiry,
+                option_type: activeOptionType // Now we send the active type
             };
         }
 
@@ -371,6 +371,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 accountHash = data.account_hash;
                 enableControls(true);
                 setStatus('Idle');
+
+                // --- Event Listeners for Call/Put focus ---
+                const callControls = [
+                    document.querySelectorAll('.quote-group')[0],
+                    document.querySelectorAll('.order-box')[0],
+                    document.querySelectorAll('.order-box')[1]
+                ];
+                const putControls = [
+                    document.querySelectorAll('.quote-group')[1],
+                    document.querySelectorAll('.order-box')[2],
+                    document.querySelectorAll('.order-box')[3]
+                ];
+
+                const setActiveSection = (type) => {
+                    if (activeOptionType !== type) {
+                        activeOptionType = type;
+                        updateBackendWatchlist(); // Update watchlist on section change
+                    }
+                };
+
+                callControls.forEach(el => el.addEventListener('mouseenter', () => setActiveSection('CALL')));
+                putControls.forEach(el => el.addEventListener('mouseenter', () => setActiveSection('PUT')));
                 fetchRecentFills();
                 setInterval(fetchRecentFills, 30000);
                 setInterval(fetchPositions, 10000);
