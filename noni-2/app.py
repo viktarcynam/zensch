@@ -227,7 +227,7 @@ def get_positions(symbol):
         accounts = positions_response.get('data', {}).get('accounts', [])
         for acc in accounts:
             for pos in acc.get('positions', []):
-                asset_type = pos.get('instrument', {}).get('assetType')
+                asset_type = pos.get('assetType')
                 qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
                 if qty == 0:
                     continue
