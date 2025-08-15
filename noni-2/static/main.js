@@ -114,14 +114,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // 1. Separate positions
+                // 1. Separate positions and calculate DTE for options
                 const stockPosition = data.positions.find(p => p.asset_type === 'EQUITY');
-                let callPositions = data.positions.filter(p => p.asset_type === 'OPTION' && p.put_call === 'CALL');
-                let putPositions = data.positions.filter(p => p.asset_type === 'OPTION' && p.put_call === 'PUT');
+                const options = data.positions.filter(p => p.asset_type === 'OPTION');
 
-                // 2. Sort option positions by DTE
-                callPositions.sort((a, b) => a.dte - b.dte);
-                putPositions.sort((a, b) => a.dte - b.dte);
+                options.forEach(opt => {
+                    const expiryDate = new Date(opt.expiry + 'T00:00:00');
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const diffTime = expiryDate - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    opt.dte = diffDays >= 0 ? diffDays + 1 : 0; // Ensure DTE is not negative
+                });
+
+                // 2. Sort option positions by DTE, then by strike
+                options.sort((a, b) => {
+                    if (a.dte !== b.dte) {
+                        return a.dte - b.dte;
+                    }
+                    return a.strike - b.strike;
+                });
+
+                const callPositions = options.filter(p => p.put_call === 'CALL');
+                const putPositions = options.filter(p => p.put_call === 'PUT');
 
                 // 3. Handle stock position display
                 if (stockPosition) {
@@ -136,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const columnsContainer = document.createElement('div');
                     columnsContainer.className = 'option-columns-container';
 
-                    // Create call column
                     const callColumn = document.createElement('div');
                     callColumn.className = 'position-column';
                     callPositions.forEach(pos => {
@@ -145,7 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         callColumn.appendChild(posDiv);
                     });
 
-                    // Create put column
                     const putColumn = document.createElement('div');
                     putColumn.className = 'position-column';
                     putPositions.forEach(pos => {

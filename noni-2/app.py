@@ -233,7 +233,6 @@ def get_positions(symbol):
             if qty == 0:
                 continue
 
-            # This is the base object for all positions
             position_data = {
                 'asset_type': asset_type,
                 'quantity': qty,
@@ -246,23 +245,15 @@ def get_positions(symbol):
                 clean_positions.append(position_data)
 
             elif asset_type == 'OPTION':
-                # Use the reliable parsing function
                 details = parse_option_position_details(pos)
                 if details:
-                    try:
-                        expiry_date = datetime.strptime(details['expiry'], '%Y-%m-%d')
-                        dte = (expiry_date - datetime.now()).days + 1
-
-                        # Add all the relevant option details to the dictionary
-                        position_data.update({
-                            'put_call': details.get('put_call'),
-                            'strike': details.get('strike'),
-                            'expiry': details.get('expiry'),
-                            'dte': dte if dte >= 0 else 0
-                        })
-                        clean_positions.append(position_data)
-                    except (ValueError, TypeError):
-                        continue
+                    # Pass the raw details through; DTE will be calculated on the frontend.
+                    position_data.update({
+                        'put_call': details.get('put_call'),
+                        'strike': details.get('strike'),
+                        'expiry': details.get('expiry'),
+                    })
+                    clean_positions.append(position_data)
 
     return jsonify({"success": True, "positions": clean_positions})
 
