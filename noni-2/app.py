@@ -93,6 +93,23 @@ def background_poller():
 
                 # 2. Auto-discover externally placed orders
                 if INTERESTED_INSTRUMENTS:
+                    # Broaden the search to all orders in the last 24 hours for debugging
+                    from_time = datetime.now() - timedelta(days=1)
+                    all_orders_response = client.get_option_orders(
+                        account_id=primary_account_hash,
+                        from_entered_time=from_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    )
+
+                    # Log the raw response to a file for analysis
+                    if all_orders_response.get('success'):
+                        try:
+                            with open("debug_working_orders.json", "w") as f:
+                                json.dump(all_orders_response.get('data', []), f, indent=2)
+                            app.logger.info("Successfully wrote all recent orders to debug_working_orders.json")
+                        except Exception as e:
+                            app.logger.error(f"Failed to write debug file: {e}")
+
+                    # Also, for now, we continue to check the known active statuses
                     all_active_orders = []
                     for status in ['WORKING', 'PENDING_ACTIVATION']:
                         response = client.get_option_orders(account_id=primary_account_hash, status=status)
