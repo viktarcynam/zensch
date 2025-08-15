@@ -224,9 +224,7 @@ def get_positions(symbol):
     if not (positions_response.get('success') and positions_response.get('data')):
         return jsonify({"success": False, "error": "Failed to retrieve positions via API."}), 500
 
-    stock_positions = []
-    option_positions = []
-
+    clean_positions = []
     accounts = positions_response.get('data', {}).get('accounts', [])
     for acc in accounts:
         for pos in acc.get('positions', []):
@@ -235,39 +233,38 @@ def get_positions(symbol):
             if qty == 0:
                 continue
 
+            # This is the base object for all positions
+            position_data = {
+                'asset_type': asset_type,
+                'quantity': qty,
+                'average_price': pos.get('averagePrice', 0.0)
+            }
+
+            instrument = pos.get('instrument', {})
             if asset_type == 'EQUITY':
-                stock_positions.append(f"STOCK: {int(qty)}")
+                position_data['symbol'] = instrument.get('symbol')
+                clean_positions.append(position_data)
+
             elif asset_type == 'OPTION':
+                # Use the reliable parsing function
                 details = parse_option_position_details(pos)
                 if details:
                     try:
                         expiry_date = datetime.strptime(details['expiry'], '%Y-%m-%d')
-                        # Add 1 to be inclusive of the expiration day
                         dte = (expiry_date - datetime.now()).days + 1
-                        details['dte'] = dte if dte >= 0 else 0
-                        option_positions.append(details)
+
+                        # Add all the relevant option details to the dictionary
+                        position_data.update({
+                            'put_call': details.get('put_call'),
+                            'strike': details.get('strike'),
+                            'expiry': details.get('expiry'),
+                            'dte': dte if dte >= 0 else 0
+                        })
+                        clean_positions.append(position_data)
                     except (ValueError, TypeError):
-                        continue # Skip if expiry date is malformed
+                        continue
 
-    # Sort the option positions by DTE in ascending order
-    option_positions.sort(key=lambda x: x.get('dte', float('inf')))
-
-    # Format the sorted option positions into strings
-    formatted_options = []
-    for opt in option_positions:
-        put_call_abbr = opt['put_call'][0] if opt.get('put_call') else '?'
-        price_str = f" @{opt.get('price'):.2f}" if opt.get('price') is not None else ""
-        formatted_options.append(
-            f"{opt.get('quantity', 0):+g} {put_call_abbr} Strk:{opt.get('strike', 0)}{price_str} dte:{opt.get('dte', 'N/A')}"
-        )
-
-    # Combine stock (always first) and sorted options
-    final_positions = stock_positions + formatted_options
-
-    if not final_positions:
-        return jsonify({"success": True, "positions": ["No Pos"]})
-
-    return jsonify({"success": True, "positions": final_positions})
+    return jsonify({"success": True, "positions": clean_positions})
 
 
 @app.route('/api/recent_fills', methods=['GET'])

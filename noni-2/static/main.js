@@ -107,14 +107,59 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             positionDisplay.innerHTML = ''; // Clear previous content
+
             if (data.success && data.positions) {
-                data.positions.forEach(posString => {
-                    const posDiv = document.createElement('div');
-                    posDiv.textContent = posString;
-                    positionDisplay.appendChild(posDiv);
-                });
+                if (data.positions.length === 0) {
+                    positionDisplay.textContent = 'No Pos';
+                    return;
+                }
+
+                // 1. Separate positions
+                const stockPosition = data.positions.find(p => p.asset_type === 'EQUITY');
+                let callPositions = data.positions.filter(p => p.asset_type === 'OPTION' && p.put_call === 'CALL');
+                let putPositions = data.positions.filter(p => p.asset_type === 'OPTION' && p.put_call === 'PUT');
+
+                // 2. Sort option positions by DTE
+                callPositions.sort((a, b) => a.dte - b.dte);
+                putPositions.sort((a, b) => a.dte - b.dte);
+
+                // 3. Handle stock position display
+                if (stockPosition) {
+                    const stockDiv = document.createElement('div');
+                    stockDiv.className = 'stock-position-line';
+                    stockDiv.textContent = `STOCK: ${parseInt(stockPosition.quantity)} @${stockPosition.average_price.toFixed(2)}`;
+                    positionDisplay.appendChild(stockDiv);
+                }
+
+                // 4. Build two-column layout for options
+                if (callPositions.length > 0 || putPositions.length > 0) {
+                    const columnsContainer = document.createElement('div');
+                    columnsContainer.className = 'option-columns-container';
+
+                    // Create call column
+                    const callColumn = document.createElement('div');
+                    callColumn.className = 'position-column';
+                    callPositions.forEach(pos => {
+                        const posDiv = document.createElement('div');
+                        posDiv.textContent = `${pos.quantity > 0 ? '+' : ''}${parseInt(pos.quantity)} C Strk:${pos.strike} dte:${pos.dte}`;
+                        callColumn.appendChild(posDiv);
+                    });
+
+                    // Create put column
+                    const putColumn = document.createElement('div');
+                    putColumn.className = 'position-column';
+                    putPositions.forEach(pos => {
+                        const posDiv = document.createElement('div');
+                        posDiv.textContent = `${pos.quantity > 0 ? '+' : ''}${parseInt(pos.quantity)} P Strk:${pos.strike} dte:${pos.dte}`;
+                        putColumn.appendChild(posDiv);
+                    });
+
+                    columnsContainer.appendChild(callColumn);
+                    columnsContainer.appendChild(putColumn);
+                    positionDisplay.appendChild(columnsContainer);
+                }
             } else {
-                positionDisplay.textContent = 'Pos Error';
+                positionDisplay.textContent = data.error || 'Pos Error';
             }
         } catch (error) {
             logError(`Error fetching positions: ${error.message}`);
