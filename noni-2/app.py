@@ -255,8 +255,6 @@ def handle_order():
         if existing_order_to_replace:
             # --- We are replacing an existing order ---
             app.logger.info(f"Found existing order {existing_order_to_replace['order_id']}. Replacing it.")
-            # The client's replace function requires all details, not just the changes.
-            # We use the details from the incoming request.
             response = client.replace_option_order(
                 account_id=details['account_id'],
                 order_id=existing_order_to_replace['order_id'],
@@ -269,6 +267,14 @@ def handle_order():
                 order_type=details['order_type'],
                 price=details.get('price')
             )
+            # If the replace call was successful, immediately remove the old order from the cache
+            # to prevent the frontend from polling for an invalid ID.
+            if response.get('success'):
+                with CACHE_LOCK:
+                    old_order_id = existing_order_to_replace['order_id']
+                    if old_order_id in ACTIVE_ORDERS:
+                        del ACTIVE_ORDERS[old_order_id]
+                        app.logger.info(f"Immediately removed replaced order {old_order_id} from active cache.")
         else:
             # --- We are placing a new order ---
             app.logger.info("No existing order found. Placing a new order.")
