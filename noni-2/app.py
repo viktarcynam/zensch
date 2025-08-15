@@ -228,20 +228,24 @@ def get_positions(symbol):
             for pos in acc.get('positions', []):
                 instrument = pos.get('instrument', {})
                 asset_type = instrument.get('assetType')
-
-                # Determine the symbol to check based on the asset type
                 symbol_to_check = ''
+
                 if asset_type == 'EQUITY':
                     symbol_to_check = instrument.get('symbol', '')
                 elif asset_type == 'OPTION':
-                    symbol_to_check = instrument.get('underlyingSymbol', '')
+                    # For options, the most reliable way to get the underlying symbol
+                    # is to parse the description string.
+                    description = instrument.get('description', '')
+                    if description:
+                        symbol_to_check = description.split(' ')[0]
 
                 # Now, perform the filter
                 if symbol_to_check.upper() != symbol.upper():
                     continue
 
                 qty = pos.get('longQuantity', 0) - pos.get('shortQuantity', 0)
-                if qty == 0: continue
+                if qty == 0:
+                    continue
 
                 if asset_type == 'EQUITY':
                     position_strings.append(f"STOCK: {int(qty)}")
