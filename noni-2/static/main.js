@@ -25,6 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelBtn = document.getElementById('cancel-btn');
     const fillsScroller = document.getElementById('fills-scroller');
     const priceScroller = document.getElementById('price-scroller');
+    const errorLogContainer = document.getElementById('error-log-container');
+    const errorLogHeader = document.getElementById('error-log-header');
+    const errorLogContent = document.getElementById('error-log-content');
+    const errorLogToggleIcon = document.getElementById('error-log-toggle-icon');
 
     // --- State Management ---
     let accountHash = null;
@@ -34,8 +38,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let instrumentOrders = []; // The single source of truth for active orders for the current instrument.
 
     // --- Helper Functions ---
+    const logErrorToUI = (message) => {
+        const now = new Date();
+        const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-log-message';
+        errorDiv.textContent = `[${timestamp}] ${message}`;
+        errorLogContent.insertBefore(errorDiv, errorLogContent.firstChild);
+        errorLogContainer.style.display = 'block'; // Make sure it's visible when an error occurs
+    };
+
     const logError = async (errorMessage) => {
         console.error(errorMessage);
+        logErrorToUI(errorMessage); // Log to our new UI element
         try {
             await fetch('/api/log_error', {
                 method: 'POST',
@@ -338,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ order_details: orderDetails })
             });
             const data = await response.json();
-            if (data.success && data.order_id) {
+            if (data.success) {
                 setStatus('Placed. Waiting for status...');
                 pollInstrumentOrders(); // Refresh immediately to pick up the new order
             } else {
@@ -503,6 +518,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     cancelBtn.addEventListener('click', () => handleCancel(null));
+
+    errorLogHeader.addEventListener('click', () => {
+        errorLogContainer.classList.toggle('collapsed');
+        const icon = errorLogToggleIcon;
+        if (errorLogContainer.classList.contains('collapsed')) {
+            icon.textContent = '[+]';
+        } else {
+            icon.textContent = '[-]';
+        }
+    });
 
     // --- Start the app ---
     init();
