@@ -35,6 +35,7 @@ body {
 }
 .fills-scroller {
     width: 220px; /* Wider to prevent wrapping */
+    font-size: 0.7em; /* Reduced font size by ~25% from 0.9em */
 }
 
 .container {
