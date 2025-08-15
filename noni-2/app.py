@@ -128,8 +128,8 @@ def background_poller():
                     # This is the original logic, which we will now run on the fetched orders
                     for order in all_active_orders:
                         order_id = order.get('orderId')
-                        if order_id in ACTIVE_ORDERS:
-                            continue # Already tracking this one
+                        # By removing the check for `if order_id in ACTIVE_ORDERS`, we force reprocessing.
+                        # This is more robust against strange API behavior or race conditions.
 
                         # Parse the instrument details from the order
                         leg = order.get('orderLegCollection', [{}])[0]
