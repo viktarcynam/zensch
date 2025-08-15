@@ -121,45 +121,45 @@ def background_poller():
                     # This is the original logic, which we will now run on the fetched orders
                     for order in all_active_orders:
                         order_id = order.get('orderId')
-                            if order_id in ACTIVE_ORDERS:
-                                continue # Already tracking this one
+                        if order_id in ACTIVE_ORDERS:
+                            continue # Already tracking this one
 
-                            # Parse the instrument details from the order
-                            leg = order.get('orderLegCollection', [{}])[0]
-                            instrument = leg.get('instrument', {})
-                            if not instrument: continue
+                        # Parse the instrument details from the order
+                        leg = order.get('orderLegCollection', [{}])[0]
+                        instrument = leg.get('instrument', {})
+                        if not instrument: continue
 
-                            # We need to parse the description to get strike and expiry
-                            # Example: "WEBULL CORP 08/15/2025 $15.5 Put"
-                            try:
-                                desc_parts = instrument.get('description', '').split(' ')
-                                order_expiry = datetime.strptime(desc_parts[-3], '%m/%d/%Y').strftime('%Y-%m-%d')
-                                order_strike = float(desc_parts[-2].replace('$', ''))
-                                order_put_call = instrument.get('putCall')
-                                order_symbol = instrument.get('underlyingSymbol')
+                        # We need to parse the description to get strike and expiry
+                        # Example: "WEBULL CORP 08/15/2025 $15.5 Put"
+                        try:
+                            desc_parts = instrument.get('description', '').split(' ')
+                            order_expiry = datetime.strptime(desc_parts[-3], '%m/%d/%Y').strftime('%Y-%m-%d')
+                            order_strike = float(desc_parts[-2].replace('$', ''))
+                            order_put_call = instrument.get('putCall')
+                            order_symbol = instrument.get('underlyingSymbol')
 
-                                # Compare with our watchlist
-                                for interested in INTERESTED_INSTRUMENTS.values():
-                                    if (interested.get('symbol', '').upper() == order_symbol and
-                                        abs(interested.get('strike', 0) - order_strike) < 0.001 and
-                                        interested.get('expiry') == order_expiry):
+                            # Compare with our watchlist
+                            for interested in INTERESTED_INSTRUMENTS.values():
+                                if (interested.get('symbol', '').upper() == order_symbol and
+                                    abs(interested.get('strike', 0) - order_strike) < 0.001 and
+                                    interested.get('expiry') == order_expiry):
 
-                                        app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol}. Adding to watchlist.")
-                                        # Add it to ACTIVE_ORDERS so we start tracking it
-                                        ACTIVE_ORDERS[order_id] = {
-                                            "account_id": primary_account_hash,
-                                            "symbol": order_symbol,
-                                            "option_type": order_put_call,
-                                            "expiration_date": order_expiry,
-                                            "strike_price": order_strike,
-                                            "quantity": leg.get('quantity'),
-                                            "side": leg.get('instruction'),
-                                            "order_type": order.get('orderType'),
-                                            "price": order.get('price')
-                                        }
-                                        break # Stop checking other interested instruments for this order
-                            except (ValueError, IndexError, TypeError):
-                                continue # Could not parse this order's description
+                                    app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol}. Adding to watchlist.")
+                                    # Add it to ACTIVE_ORDERS so we start tracking it
+                                    ACTIVE_ORDERS[order_id] = {
+                                        "account_id": primary_account_hash,
+                                        "symbol": order_symbol,
+                                        "option_type": order_put_call,
+                                        "expiration_date": order_expiry,
+                                        "strike_price": order_strike,
+                                        "quantity": leg.get('quantity'),
+                                        "side": leg.get('instruction'),
+                                        "order_type": order.get('orderType'),
+                                        "price": order.get('price')
+                                    }
+                                    break # Stop checking other interested instruments for this order
+                        except (ValueError, IndexError, TypeError):
+                            continue # Could not parse this order's description
 
                 # 3. Collect all unique symbols from active orders for quote fetching
                 if ACTIVE_ORDERS:
