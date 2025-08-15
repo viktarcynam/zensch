@@ -555,6 +555,8 @@ def get_instrument_orders():
     strike_str = request.args.get('strike')
     expiry = request.args.get('expiry')
 
+    app.logger.debug(f"API_GET_ORDERS: Request for {symbol} {strike_str} {expiry}")
+
     if not all([symbol, strike_str, expiry]):
         return jsonify({"success": False, "error": "Missing params", "orders": []}), 400
 
@@ -566,15 +568,19 @@ def get_instrument_orders():
     found_orders = []
 
     with CACHE_LOCK:
+        app.logger.debug(f"API_GET_ORDERS: Checking {len(ACTIVE_ORDERS)} active orders. Cache: {json.dumps(ACTIVE_ORDERS)}")
         # Find all active orders that match the instrument
         for order_id, order_details in ACTIVE_ORDERS.items():
             details_strike = order_details.get('strike_price') or order_details.get('strike')
             details_expiry = order_details.get('expiration_date') or order_details.get('expiry')
 
-            if (order_details.get('symbol') == symbol and
+            app.logger.debug(f"API_GET_ORDERS: Comparing with order {order_id} -> S:{order_details.get('symbol')} K:{details_strike} E:{details_expiry}")
+
+            if (order_details.get('symbol').upper() == symbol.upper() and
                 details_strike == strike and
                 details_expiry == expiry):
 
+                app.logger.info(f"API_GET_ORDERS: Match found for order {order_id}. Adding to response.")
                 status_data = DATA_CACHE.get('order_statuses', {}).get(order_id, {})
 
                 order_info = {
@@ -587,7 +593,11 @@ def get_instrument_orders():
                     "price": order_details.get('price')
                 }
                 found_orders.append(order_info)
+            else:
+                app.logger.debug(f"API_GET_ORDERS: No match for order {order_id}.")
 
+
+    app.logger.debug(f"API_GET_ORDERS: Returning {len(found_orders)} orders.")
     return jsonify({"success": True, "orders": found_orders})
 
 
