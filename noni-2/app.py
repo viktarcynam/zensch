@@ -19,6 +19,10 @@ app = Flask(__name__)
 # The key is the order_id, and the value is a dictionary of its details.
 ACTIVE_ORDERS = {}
 
+# INTERESTED_INSTRUMENTS stores a "watchlist" of instruments the user is
+# currently viewing in the UI, keyed by a unique section_id from the frontend.
+INTERESTED_INSTRUMENTS = {}
+
 # DATA_CACHE stores the latest data fetched from the API.
 # This is what the frontend will read from, making it fast and reducing API calls.
 DATA_CACHE = {
@@ -73,11 +77,58 @@ def background_poller():
                     continue
 
                 # --- Main Polling Logic (Fast Mode) ---
-                # 1. Collect all unique symbols and account hashes from active orders
+                # 1. Auto-discover externally placed orders
+                if DATA_CACHE.get('account_hashes') and INTERESTED_INSTRUMENTS:
+                    primary_account_hash = DATA_CACHE['account_hashes'][0].get('hashValue')
+                    working_orders_response = client.get_option_orders(account_id=primary_account_hash, status='WORKING')
+                    if working_orders_response.get('success'):
+                        for order in working_orders_response.get('data', []):
+                            order_id = order.get('orderId')
+                            if order_id in ACTIVE_ORDERS:
+                                continue # Already tracking this one
+
+                            # Parse the instrument details from the order
+                            leg = order.get('orderLegCollection', [{}])[0]
+                            instrument = leg.get('instrument', {})
+                            if not instrument: continue
+
+                            # We need to parse the description to get strike and expiry
+                            # Example: "WEBULL CORP 08/15/2025 $15.5 Put"
+                            try:
+                                desc_parts = instrument.get('description', '').split(' ')
+                                order_expiry = datetime.strptime(desc_parts[-3], '%m/%d/%Y').strftime('%Y-%m-%d')
+                                order_strike = float(desc_parts[-2].replace('$', ''))
+                                order_put_call = instrument.get('putCall')
+                                order_symbol = instrument.get('underlyingSymbol')
+
+                                # Compare with our watchlist
+                                for interested in INTERESTED_INSTRUMENTS.values():
+                                    if (interested.get('symbol', '').upper() == order_symbol and
+                                        abs(interested.get('strike', 0) - order_strike) < 0.001 and
+                                        interested.get('expiry') == order_expiry):
+
+                                        app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol}. Adding to watchlist.")
+                                        # Add it to ACTIVE_ORDERS so we start tracking it
+                                        ACTIVE_ORDERS[order_id] = {
+                                            "account_id": primary_account_hash,
+                                            "symbol": order_symbol,
+                                            "option_type": order_put_call,
+                                            "expiration_date": order_expiry,
+                                            "strike_price": order_strike,
+                                            "quantity": leg.get('quantity'),
+                                            "side": leg.get('instruction'),
+                                            "order_type": order.get('orderType'),
+                                            "price": order.get('price')
+                                        }
+                                        break # Stop checking other interested instruments for this order
+                            except (ValueError, IndexError, TypeError):
+                                continue # Could not parse this order's description
+
+                # 2. Collect all unique symbols and account hashes from active orders (now including discovered ones)
                 symbols_to_poll = set(order['symbol'] for order in ACTIVE_ORDERS.values())
                 account_hashes_to_poll = set(order['account_id'] for order in ACTIVE_ORDERS.values())
 
-                # 2. Bulk fetch quotes for all unique symbols
+                # 3. Bulk fetch quotes for all unique symbols
                 if symbols_to_poll:
                     quotes_response = client.get_quotes(symbols=list(symbols_to_poll))
                     if quotes_response.get('success') and quotes_response.get('data'):
@@ -91,7 +142,7 @@ def background_poller():
                         app.logger.warning(f"Poller failed to get quotes: {quotes_response.get('error')}")
 
 
-                # 3. Fetch positions for each account
+                # 4. Fetch positions for each account
                 for acc_hash in account_hashes_to_poll:
                     positions_response = client.get_positions(account_hash=acc_hash)
                     if positions_response.get('success'):
@@ -99,7 +150,7 @@ def background_poller():
                     else:
                         app.logger.warning(f"Poller failed to get positions for {acc_hash}")
 
-                # 4. Fetch status for each active order
+                # 5. Fetch status for each active order
                 # Make a copy of keys to avoid issues with dict size changing during iteration
                 for order_id, order_details in list(ACTIVE_ORDERS.items()):
                     status_response = client.get_option_order_details(
@@ -359,6 +410,27 @@ def find_replacement_order_api():
             return jsonify({"success": True, "replacement_order": replacement})
 
     return jsonify({"success": False, "error": "Not found"}), 404
+
+
+@app.route('/api/set_interested_instrument', methods=['POST'])
+def set_interested_instrument():
+    data = request.get_json()
+    if not data or 'section_id' not in data or 'instrument' not in data:
+        return jsonify({"success": False, "error": "Invalid request. Missing section_id or instrument."}), 400
+
+    section_id = data['section_id']
+    instrument = data['instrument']
+
+    with CACHE_LOCK:
+        if instrument:
+            INTERESTED_INSTRUMENTS[section_id] = instrument
+            app.logger.info(f"Updated instrument of interest for section {section_id}: {instrument.get('symbol')}")
+        elif section_id in INTERESTED_INSTRUMENTS:
+            del INTERESTED_INSTRUMENTS[section_id]
+            app.logger.info(f"Cleared instrument of interest for section {section_id}")
+
+    return jsonify({"success": True})
+
 
 @app.route('/api/trigger_fast_poll', methods=['POST'])
 def trigger_fast_poll():

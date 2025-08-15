@@ -165,6 +165,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const updateBackendWatchlist = async () => {
+        const symbol = symbolInput.value.trim().toUpperCase();
+        const strike = strikeInput.value;
+        const expiry = expiryInput.value;
+
+        let instrumentPayload = null;
+        if (symbol && strike && expiry) {
+            instrumentPayload = {
+                symbol: symbol,
+                strike: parseFloat(strike),
+                expiry: expiry
+                // Note: We don't send option_type, as the backend will match
+                // either a Call or a Put for the given instrument.
+            };
+        }
+
+        try {
+            await fetch('/api/set_interested_instrument', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    section_id: "section-1", // Hardcoded for the current single-section UI
+                    instrument: instrumentPayload
+                })
+            });
+        } catch (error) {
+            logError(`Failed to update backend watchlist: ${error.message}`);
+        }
+    };
+
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
         const symbol = symbolInput.value.trim().toUpperCase();
@@ -174,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchQuoteAndInstrumentPosition(true);
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
         }
+        updateBackendWatchlist();
     };
 
     const placeOrder = async (orderDetails) => {
