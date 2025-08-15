@@ -192,6 +192,12 @@ def get_recent_fills():
                     instrument = leg.get('instrument', {})
                     activity = order['orderActivityCollection'][0]['executionLegs'][0]
 
+                    # Determine the correct sign for the quantity
+                    quantity = leg.get('quantity', 0)
+                    instruction = leg.get('instruction', '')
+                    if 'SELL' in instruction.upper():
+                        quantity = -quantity
+
                     parsed_symbol = parse_option_symbol(instrument.get('symbol'))
                     if not parsed_symbol:
                         continue
@@ -203,7 +209,7 @@ def get_recent_fills():
                     dte = (expiry_date_obj.date() - datetime.now().date()).days
 
                     fill_string = (
-                        f"{leg['quantity']:+g} {instrument.get('putCall', ' ')[0]} {instrument.get('underlyingSymbol')} "
+                        f"{quantity:+g} {instrument.get('putCall', ' ')[0]} {instrument.get('underlyingSymbol')} "
                         f"strk:{strike} dte:{dte} {activity['price']:.2f}"
                     )
                     fills_strings.append(fill_string)
