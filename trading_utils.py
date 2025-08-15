@@ -4,41 +4,11 @@ from datetime import datetime, timedelta
 
 def parse_option_symbol(symbol_string):
     """
-    Parses an option symbol string into its components.
-    Handles two formats:
-    1. Descriptive format: 'NVO 08/22/25 150.0 C'
-    2. Standard OCC format: 'HOG   250815C00024000'
+    Parses a standard OCC option symbol string.
+    Example: 'HOG   250815C00024000'
     Returns: A dictionary with 'underlying', 'expiry_date', 'put_call', 'strike'.
     """
-    if not symbol_string:
-        return None
-
-    # Attempt to parse the descriptive format first.
     try:
-        parts = symbol_string.split(' ')
-        if len(parts) == 4:
-            # Example: ['NVO', '08/22/25', '150.0', 'C']
-            underlying = parts[0]
-            expiry_str = parts[1]
-            strike_str = parts[2]
-            put_call_char = parts[3]
-
-            expiry_date = datetime.strptime(expiry_str, '%m/%d/%y').strftime('%Y-%m-%d')
-            put_call = "CALL" if put_call_char.upper() == 'C' else "PUT"
-            strike = float(strike_str)
-            return {
-                "underlying": underlying,
-                "expiry_date": expiry_date,
-                "put_call": put_call,
-                "strike": strike
-            }
-    except (ValueError, IndexError, TypeError):
-        # If descriptive parsing fails, it might be the other format, so we pass.
-        pass
-
-    # Fallback to parsing the standard OCC fixed-width format.
-    try:
-        # Example: 'HOG   250815C00024000'
         underlying = symbol_string[0:6].strip()
         date_str = symbol_string[6:12]
         expiry_date = datetime.strptime(date_str, '%y%m%d').strftime('%Y-%m-%d')
@@ -52,8 +22,9 @@ def parse_option_symbol(symbol_string):
             "put_call": put_call,
             "strike": strike
         }
-    except (ValueError, IndexError, TypeError):
-        # If both parsing attempts fail, return None.
+    except (ValueError, IndexError) as e:
+        # This function is used by both CLI and web, so direct printing is not ideal.
+        # The caller should handle the None return value.
         return None
 
 
@@ -77,6 +48,32 @@ def get_next_friday():
         days_until_friday = 7
     next_friday = today + timedelta(days=days_until_friday)
     return next_friday.strftime('%Y-%m-%d')
+
+
+def parse_instrument_description(description: str) -> dict or None:
+    """
+    Parses an instrument description string to extract strike and expiry.
+    Example: "NOVO-NORDISK A/S 08/22/2025 $150 Put"
+    Returns a dictionary with 'strike' and 'expiry', or None on failure.
+    """
+    try:
+        if not description:
+            return None
+
+        desc_parts = description.split(' ')
+        # Assumes the format is "... <Date> <Strike> <Type>"
+        desc_expiry_str = desc_parts[-3]
+        desc_strike_str = desc_parts[-2].replace('$', '')
+
+        expiry = datetime.strptime(desc_expiry_str, '%m/%d/%Y').strftime('%Y-%m-%d')
+        strike = float(desc_strike_str)
+
+        return {
+            "strike": strike,
+            "expiry": expiry
+        }
+    except (ValueError, IndexError, TypeError):
+        return None
 
 
 def parse_option_position_details(position: dict) -> dict or None:

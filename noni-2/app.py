@@ -10,7 +10,7 @@ import json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from client import SchwabClient
 from trading_utils import parse_option_symbol, get_nearest_strike, get_next_friday, parse_option_position_details, \
-    find_replacement_order
+    find_replacement_order, parse_instrument_description
 
 app = Flask(__name__)
 
@@ -115,20 +115,22 @@ def background_poller():
                         instrument = leg.get('instrument', {})
                         if not instrument: continue
 
-                        # The instrument object gives us everything we need directly.
-                        # No need to parse the description string.
                         try:
                             order_symbol = instrument.get('underlyingSymbol')
                             order_put_call = instrument.get('putCall')
+                            description = instrument.get('description')
 
-                            # The option symbol itself contains the expiry and strike.
-                            # e.g., 'NVO_081525C51'
-                            parsed_details = parse_option_symbol(instrument.get('symbol'))
-                            if not parsed_details:
-                                app.logger.warning(f"Could not parse option symbol: {instrument.get('symbol')}")
+                            if not description:
                                 continue
 
-                            order_expiry = parsed_details['expiry_date']
+                            # Use the new, reliable description parser
+                            parsed_details = parse_instrument_description(description)
+
+                            if not parsed_details:
+                                app.logger.warning(f"Could not parse instrument description for auto-discovery: {description}")
+                                continue
+
+                            order_expiry = parsed_details['expiry']
                             order_strike = parsed_details['strike']
 
                             # Now, compare with our watchlist of interested instruments
@@ -139,7 +141,7 @@ def background_poller():
                                         abs(interested['strike'] - order_strike) < 0.001 and
                                         interested['expiry'] == order_expiry):
 
-                                        app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol}. Adding to active monitoring.")
+                                        app.logger.info(f"Auto-discovered external order {order_id} for {order_symbol} via description. Adding to active monitoring.")
                                         # Add it to ACTIVE_ORDERS so we can start tracking it
                                         ACTIVE_ORDERS[order_id] = {
                                             "account_id": primary_account_hash,
