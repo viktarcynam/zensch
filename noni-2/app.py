@@ -185,14 +185,13 @@ def get_recent_fills():
         today_str = datetime.now().strftime('%Y-%m-%d')
         orders_response = client.get_option_orders(account_id=account_hash, status='FILLED', from_entered_time=f"{today_str}T00:00:00Z", to_entered_time=f"{today_str}T23:59:59Z")
         if orders_response.get('success') and orders_response.get('data'):
-            fills_strings = []
+            filled_orders_data = []
             for order in orders_response.get('data', []):
                 try:
                     leg = order['orderLegCollection'][0]
                     instrument = leg.get('instrument', {})
                     activity = order['orderActivityCollection'][0]['executionLegs'][0]
 
-                    # Determine the correct sign for the quantity
                     quantity = leg.get('quantity', 0)
                     instruction = leg.get('instruction', '')
                     if 'SELL' in instruction.upper():
@@ -205,18 +204,19 @@ def get_recent_fills():
                     strike = parsed_symbol.get('strike')
                     expiry_date_str = parsed_symbol.get('expiry_date')
 
-                    expiry_date_obj = datetime.strptime(expiry_date_str, '%Y-%m-%d')
-                    dte = (expiry_date_obj.date() - datetime.now().date()).days
-
-                    fill_string = (
-                        f"{quantity:+g} {instrument.get('putCall', ' ')[0]} {instrument.get('underlyingSymbol')} "
-                        f"strk:{strike} dte:{dte} {activity['price']:.2f}"
-                    )
-                    fills_strings.append(fill_string)
+                    fill_object = {
+                        "quantity": quantity,
+                        "putCall": instrument.get('putCall', ' ')[0],
+                        "symbol": instrument.get('underlyingSymbol'),
+                        "strike": strike,
+                        "expiry": expiry_date_str,
+                        "price": activity.get('price')
+                    }
+                    filled_orders_data.append(fill_object)
                 except (IndexError, KeyError, TypeError, ValueError) as e:
                     app.logger.error(f"Error parsing recent fill: {e} - Order: {order}")
                     continue
-            return jsonify({"success": True, "fills": fills_strings})
+            return jsonify({"success": True, "fills": filled_orders_data})
     return jsonify({"success": False, "error": "Could not retrieve recent fills."}), 500
 
 @app.route('/api/options/<symbol>/<strike>/<expiry>', methods=['GET'])

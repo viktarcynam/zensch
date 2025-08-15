@@ -87,8 +87,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success && data.fills) {
                 fillsScroller.innerHTML = '';
                 data.fills.forEach(fill => {
+                    // Calculate DTE on the frontend
+                    const expiryDate = new Date(fill.expiry + 'T00:00:00');
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const diffTime = expiryDate - today;
+                    const dte = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                    // Format the string on the frontend
+                    const fillString =
+                        `${fill.quantity > 0 ? '+' : ''}${fill.quantity} ${fill.putCall} ${fill.symbol} ` +
+                        `strk:${fill.strike} dte:${dte} ${fill.price.toFixed(2)}`;
+
                     const fillDiv = document.createElement('div');
-                    fillDiv.textContent = fill;
+                    fillDiv.textContent = fillString;
                     fillsScroller.appendChild(fillDiv);
                 });
             }
