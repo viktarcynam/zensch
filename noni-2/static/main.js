@@ -34,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let accountHash = null;
     let quotePollInterval = null;
     let instrumentStatusInterval = null;
-    let pricePollInterval = null;
     let instrumentOrders = []; // The single source of truth for active orders for the current instrument.
 
     // --- Helper Functions ---
@@ -45,7 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
         errorDiv.className = 'error-log-message';
         errorDiv.textContent = `[${timestamp}] ${message}`;
         errorLogContent.insertBefore(errorDiv, errorLogContent.firstChild);
-        errorLogContainer.style.display = 'block'; // Make sure it's visible when an error occurs
+        if (errorLogContainer.classList.contains('collapsed')) {
+             errorLogContainer.classList.remove('collapsed');
+             errorLogToggleIcon.textContent = '[-]';
+        }
     };
 
     const logError = async (errorMessage) => {
@@ -87,18 +89,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success && data.fills) {
                 fillsScroller.innerHTML = '';
                 data.fills.forEach(fill => {
-                    // Calculate DTE on the frontend
                     const expiryDate = new Date(fill.expiry + 'T00:00:00');
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     const diffTime = expiryDate - today;
                     const dte = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                    // Format the string on the frontend
                     const fillString =
                         `${fill.quantity > 0 ? '+' : ''}${fill.quantity} ${fill.putCall} ${fill.symbol} ` +
                         `strk:${fill.strike} dte:${dte} ${fill.price.toFixed(2)}`;
-
                     const fillDiv = document.createElement('div');
                     fillDiv.textContent = fillString;
                     fillsScroller.appendChild(fillDiv);
@@ -106,27 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             logError(`Error fetching recent fills: ${error.message}`);
-        }
-    };
-
-    const pollUnderlyingPrice = async () => {
-        const symbol = symbolInput.value.trim().toUpperCase();
-        if (!symbol) return;
-
-        try {
-            const response = await fetch(`/api/defaults/${symbol}`);
-            const data = await response.json();
-            if (data.success && data.price) {
-                const priceDiv = document.createElement('div');
-                priceDiv.textContent = data.price.toFixed(2);
-                priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
-
-                while (priceScroller.children.length > 50) {
-                    priceScroller.removeChild(priceScroller.lastChild);
-                }
-            }
-        } catch (error) {
-            console.error(`Error fetching underlying price: ${error.message}`);
         }
     };
 
@@ -154,9 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`/api/positions/${symbol}?account_hash=${accountHash}`);
             const data = await response.json();
-
             positionDisplay.innerHTML = '';
-
             if (data.success && data.positions) {
                 if (data.positions.length === 0) {
                     positionDisplay.textContent = 'No Pos';
@@ -220,6 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
             const data = await response.json();
             if (data.success) {
+                if (data.data.underlying) {
+                    const priceDiv = document.createElement('div');
+                    priceDiv.textContent = data.data.underlying.last.toFixed(2);
+                    priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
+                    while (priceScroller.children.length > 50) {
+                        priceScroller.removeChild(priceScroller.lastChild);
+                    }
+                }
                 const callMap = data.data.callExpDateMap, putMap = data.data.putExpDateMap;
                 const normalizedStrikeKey = parseFloat(strike).toFixed(1);
                 const callData = callMap?.[Object.keys(callMap)[0]]?.[normalizedStrikeKey]?.[0];
@@ -267,7 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
-
         let instrumentPayload = null;
         if (symbol && strike && expiry) {
             instrumentPayload = {
@@ -276,7 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 expiry: expiry
             };
         }
-
         try {
             await fetch('/api/set_interested_instrument', {
                 method: 'POST',
@@ -296,7 +277,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
         if (!symbol || !strike || !expiry || !accountHash) return;
-
         try {
             const response = await fetch(`/api/get_instrument_orders?symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
             const data = await response.json();
@@ -313,40 +293,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateStatusDisplay = () => {
         cancelBtn.disabled = instrumentOrders.length === 0;
-
         if (instrumentOrders.length === 0) {
             setStatus('Idle');
             return;
         }
-
         instrumentOrders.sort((a, b) => {
             if (a.type === 'PUT' && b.type !== 'PUT') return -1;
             if (a.type !== 'PUT' && b.type === 'PUT') return 1;
             return a.order_id - b.order_id;
         });
-
         const statusHTML = instrumentOrders.map(order =>
             `<span>${order.type} ${order.status} ${order.side} @ ${order.price ? order.price.toFixed(2) : 'N/A'}</span>`
         ).join('<br>');
-
         setStatus(statusHTML);
     };
 
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
         if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
-        if (pricePollInterval) clearInterval(pricePollInterval);
         priceScroller.innerHTML = '';
-
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
-
-        if (symbol) {
-            pollUnderlyingPrice();
-            pricePollInterval = setInterval(pollUnderlyingPrice, 2500);
-        }
-
         if (symbol && strike && expiry) {
             fetchQuoteAndInstrumentPosition(true);
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
@@ -367,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.success) {
                 setStatus('Placed. Waiting for status...');
-                pollInstrumentOrders(); // Refresh immediately to pick up the new order
+                pollInstrumentOrders();
             } else {
                 setStatus(`Error: ${data.error || 'Unknown placement error'}`, true);
             }
@@ -381,16 +349,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showCancelModal(instrumentOrders);
             return;
         }
-
         const order = orderToCancel || instrumentOrders[0];
         if (!order) {
             setStatus("No active order to cancel.", true);
             return;
         }
-
         const accountId = order.account_id || accountHash;
         const orderId = order.order_id;
-
         try {
             const response = await fetch('/api/cancel_order', {
                 method: 'POST',
@@ -471,7 +436,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetInputId = button.dataset.target;
             const amount = parseFloat(button.dataset.amount);
             const targetInput = document.getElementById(targetInputId);
-
             if (targetInput) {
                 const currentValue = parseFloat(targetInput.value) || 0;
                 const newValue = currentValue + amount;
@@ -486,11 +450,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const optionType = type === 'c' ? 'CALL' : 'PUT';
             const simpleAction = action === 'b' ? 'B' : 'S';
             const priceInput = document.getElementById(`${type}${action}-price`);
-
             const symbol = symbolInput.value.trim().toUpperCase();
             const strike = strikeInput.value;
             const expiry = expiryInput.value;
-
             let currentQuantity = 0;
             try {
                 const posResponse = await fetch(`/api/instrument_position?account_hash=${accountHash}&symbol=${symbol}&strike=${strike}&expiry=${expiry}`);
@@ -505,14 +467,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 setStatus(`API Error getting position: ${error.message}`, true);
                 return;
             }
-
             let side = '';
             if (simpleAction === 'B') {
                 side = currentQuantity < 0 ? 'BUY_TO_CLOSE' : 'BUY_TO_OPEN';
             } else {
                 side = currentQuantity > 0 ? 'SELL_TO_CLOSE' : 'SELL_TO_OPEN';
             }
-
             const orderDetails = {
                 account_id: accountHash,
                 symbol: symbol,
@@ -524,7 +484,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 order_type: 'LIMIT',
                 price: parseFloat(priceInput.value)
             };
-
             placeOrder(orderDetails);
         });
     });

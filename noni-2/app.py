@@ -222,7 +222,14 @@ def get_recent_fills():
 @app.route('/api/options/<symbol>/<strike>/<expiry>', methods=['GET'])
 def get_options(symbol, strike, expiry):
     with SchwabClient() as client:
-        chain_response = client.get_option_chains(symbol=symbol.upper(), strike=float(strike), fromDate=expiry, toDate=expiry, contractType='ALL')
+        chain_response = client.get_option_chains(
+            symbol=symbol.upper(),
+            strike=float(strike),
+            fromDate=expiry,
+            toDate=expiry,
+            contractType='ALL',
+            includeUnderlyingQuote=True
+        )
         if chain_response.get('success'):
             return jsonify({"success": True, "data": chain_response.get('data', {})})
     return jsonify({"success": False, "error": "Could not retrieve option chain."}), 500
