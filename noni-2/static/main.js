@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelBtn = document.getElementById('cancel-btn');
     const fillsScroller = document.getElementById('fills-scroller');
     const workingOrdersScroller = document.getElementById('working-orders-scroller');
-    const priceTicker = document.getElementById('price-ticker');
+    const currentPriceEl = document.getElementById('current-price');
     const errorLogContainer = document.getElementById('error-log-container');
     const errorLogHeader = document.getElementById('error-log-header');
     const errorLogContent = document.getElementById('error-log-content');
@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let instrumentStatusInterval = null;
     let instrumentOrders = []; // The single source of truth for active orders for the current instrument.
     let strikeInputOriginalValue = ''; // Store strike value before clearing for datalist display
+    let priceHistory = []; // Array to store price history for the current instrument
 
     // --- Helper Functions ---
     const logErrorToUI = (message) => {
@@ -278,15 +279,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
             const data = await response.json();
             if (data.success) {
-                if (data.data.underlying) {
-                    const priceSpan = document.createElement('span');
-                    priceSpan.className = 'price-item';
-                    priceSpan.textContent = data.data.underlying.last.toFixed(2);
-                    priceTicker.appendChild(priceSpan);
+                if (data.data.underlying && data.data.underlying.last) {
+                    const currentPrice = data.data.underlying.last;
+                    currentPriceEl.textContent = currentPrice.toFixed(2);
 
-                    // To keep the ticker from getting infinitely long
-                    while (priceTicker.children.length > 100) {
-                        priceTicker.removeChild(priceTicker.firstChild);
+                    // Add to price history and manage its size
+                    priceHistory.push(currentPrice);
+                    if (priceHistory.length > 9000) {
+                        priceHistory.shift(); // Remove the oldest entry
                     }
                 }
                 const callMap = data.data.callExpDateMap, putMap = data.data.putExpDateMap;
@@ -404,7 +404,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
         if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
-        priceTicker.innerHTML = ''; // Clear the ticker
+
+        // Clear history and reset display for the new instrument
+        priceHistory = [];
+        currentPriceEl.textContent = '-.--';
+
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
