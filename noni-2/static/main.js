@@ -316,6 +316,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 putPositionDisplay.textContent = `P:${formatPos(putQty)}`;
                 callPositionDisplay.classList.toggle('has-pos', callQty != 0);
                 putPositionDisplay.classList.toggle('has-pos', putQty != 0);
+
+                // Highlight the closing action button
+                [cbBtn, csBtn, pbBtn, psBtn].forEach(btn => btn.classList.remove('closing-action-btn'));
+                if (callQty > 0) csBtn.classList.add('closing-action-btn');
+                else if (callQty < 0) cbBtn.classList.add('closing-action-btn');
+                if (putQty > 0) psBtn.classList.add('closing-action-btn');
+                else if (putQty < 0) pbBtn.classList.add('closing-action-btn');
             }
         } catch(error) {
             logError(`Error fetching instrument position: ${error.message}`);

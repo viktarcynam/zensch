@@ -197,6 +197,11 @@ input[type="date"].expiry-input {
 #cs-btn, #ps-btn { background-color: #d9534f; }
 #cs-btn:hover, #ps-btn:hover { background-color: #c9302c; }
 
+.order-btn.closing-action-btn {
+    box-shadow: 0 0 10px 3px #ffc107; /* A gold/yellow glow */
+    border: 1px solid #ffc107;
+}
+
 .status-display {
     flex-grow: 1;
     background-color: #2b2b2b;
