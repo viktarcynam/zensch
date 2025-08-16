@@ -100,7 +100,31 @@ document.addEventListener('DOMContentLoaded', () => {
                         `${fill.quantity > 0 ? '+' : ''}${fill.quantity} ${fill.putCall} ${fill.symbol} ` +
                         `strk:${fill.strike} dte:${dte} ${fill.price.toFixed(2)}`;
                     const fillDiv = document.createElement('div');
+                    fillDiv.className = 'fill-item';
                     fillDiv.textContent = fillString;
+
+                    fillDiv.addEventListener('click', () => {
+                        // Populate the main form with the details from the clicked fill
+                        symbolInput.value = fill.symbol;
+                        expiryInput.value = fill.expiry;
+                        strikeInput.value = fill.strike;
+                        quantityInput.value = Math.abs(fill.quantity);
+
+                        // Set the price in the correct box.
+                        // If we bought (+qty), we are now selling, so populate the sell price.
+                        // If we sold (-qty), we are now buying, so populate the buy price.
+                        const priceTarget = fill.quantity > 0
+                            ? (fill.putCall === 'C' ? csPriceInput : psPriceInput)
+                            : (fill.putCall === 'C' ? cbPriceInput : pbPriceInput);
+
+                        // We don't know the new price yet, but we can set it to the old fill price as a starting point.
+                        priceTarget.value = fill.price.toFixed(2);
+
+                        // Trigger a full update for the new instrument
+                        handleInputChange();
+                        setStatus(`Loaded from fill. Ready to place counter-order.`);
+                    });
+
                     fillsScroller.appendChild(fillDiv);
                 });
             }
@@ -540,11 +564,10 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 side = currentQuantity > 0 ? 'SELL_TO_CLOSE' : 'SELL_TO_OPEN';
             }
-            let orderQuantity;
-            if (side.endsWith('_CLOSE')) {
-                orderQuantity = Math.abs(currentQuantity);
-            } else {
-                orderQuantity = parseInt(quantityInput.value, 10) || 1;
+            const orderQuantity = parseInt(quantityInput.value, 10) || 1;
+            if (orderQuantity <= 0) {
+                setStatus("Quantity must be positive.", true);
+                return;
             }
 
             const orderDetails = {

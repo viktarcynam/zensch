@@ -38,6 +38,11 @@ body {
     font-size: 0.7em; /* Reduced font size by ~25% from 0.9em */
 }
 
+.fill-item:hover {
+    background-color: #4a4e51;
+    cursor: pointer;
+}
+
 .container {
     width: 100%;
     max-width: 600px;
