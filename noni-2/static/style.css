@@ -307,6 +307,38 @@ input[type="date"].expiry-input {
     background-color: #4a4a4a;
 }
 
+.modal-title {
+    font-size: 0.9em;
+    margin-bottom: 20px;
+}
+
+.modal-price-input-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.modal-price-input-wrapper .order-input {
+    width: 80px;
+    border-radius: 4px; /* Give it normal radius */
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: space-between;
+}
+
+.modal-buttons .control-btn {
+    background-color: #888;
+}
+
+.modal-buttons .order-btn {
+    background-color: #007bff;
+}
+
+
 /* --- Error Log Styles --- */
 .error-log-container {
     margin-top: 15px;

@@ -103,28 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     fillDiv.className = 'fill-item';
                     fillDiv.textContent = fillString;
 
-                    fillDiv.addEventListener('click', () => {
-                        // Populate the main form with the details from the clicked fill
-                        symbolInput.value = fill.symbol;
-                        expiryInput.value = fill.expiry;
-                        strikeInput.value = fill.strike;
-                        quantityInput.value = Math.abs(fill.quantity);
-
-                        // Set the price in the correct box.
-                        // If we bought (+qty), we are now selling, so populate the sell price.
-                        // If we sold (-qty), we are now buying, so populate the buy price.
-                        const priceTarget = fill.quantity > 0
-                            ? (fill.putCall === 'C' ? csPriceInput : psPriceInput)
-                            : (fill.putCall === 'C' ? cbPriceInput : pbPriceInput);
-
-                        // We don't know the new price yet, but we can set it to the old fill price as a starting point.
-                        priceTarget.value = fill.price.toFixed(2);
-
-                        // Trigger a full update for the new instrument
-                        handleInputChange();
-                        setStatus(`Loaded from fill. Ready to place counter-order.`);
-                    });
-
+                    fillDiv.addEventListener('click', () => showCloseOrderModal(fill));
                     fillsScroller.appendChild(fillDiv);
                 });
             }
@@ -478,6 +457,94 @@ document.addEventListener('DOMContentLoaded', () => {
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         overlay.appendChild(content);
         document.body.appendChild(overlay);
+    };
+
+    const showCloseOrderModal = (fill) => {
+        const existingModal = document.querySelector('.modal-overlay');
+        if (existingModal) existingModal.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        const content = document.createElement('div');
+        content.className = 'modal-content';
+        content.innerHTML = `<h3>Loading price...</h3>`;
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+
+        // Fetch the current quote to populate the price
+        fetch(`/api/options/${fill.symbol}/${fill.strike}/${fill.expiry}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    content.innerHTML = `<h3>Error</h3><p>Could not fetch price data.</p>`;
+                    setTimeout(() => overlay.remove(), 2000);
+                    return;
+                }
+
+                const isClosingBuy = fill.quantity < 0;
+                const optionType = fill.putCall === 'C' ? 'CALL' : 'PUT';
+                const side = isClosingBuy ? 'BUY_TO_CLOSE' : 'SELL_TO_CLOSE';
+
+                const callMap = data.data.callExpDateMap, putMap = data.data.putExpDateMap;
+                const normalizedStrikeKey = parseFloat(fill.strike).toFixed(1);
+                const optionData = optionType === 'CALL'
+                    ? callMap?.[Object.keys(callMap)[0]]?.[normalizedStrikeKey]?.[0]
+                    : putMap?.[Object.keys(putMap)[0]]?.[normalizedStrikeKey]?.[0];
+
+                let defaultPrice = 0;
+                if(optionData) {
+                    defaultPrice = isClosingBuy
+                        ? (optionData.bid + 0.01)
+                        : (optionData.ask - 0.01);
+                }
+
+                const expiryDate = new Date(fill.expiry + 'T00:00:00');
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dte = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+                const title = `CLOSING ORDER: ${side.split('_')[0]} ${Math.abs(fill.quantity)} ${fill.symbol} ${fill.strike} ${optionType} DTE:${dte}`;
+
+                content.innerHTML = `
+                    <h3 class="modal-title">${title}</h3>
+                    <div class="modal-price-input-wrapper">
+                        <label for="modal-price-input">Price:</label>
+                        <input type="number" id="modal-price-input" class="order-input" step="0.01" value="${defaultPrice.toFixed(2)}">
+                    </div>
+                    <div class="modal-buttons">
+                        <button id="modal-cancel-btn" class="control-btn">Cancel</button>
+                        <button id="modal-submit-btn" class="order-btn">Submit Order</button>
+                    </div>
+                `;
+
+                document.getElementById('modal-cancel-btn').addEventListener('click', () => overlay.remove());
+                document.getElementById('modal-submit-btn').addEventListener('click', () => {
+                    const price = parseFloat(document.getElementById('modal-price-input').value);
+                    if (!price || price <= 0) {
+                        setStatus("Invalid price in modal.", true);
+                        return;
+                    }
+                    const orderDetails = {
+                        account_id: accountHash,
+                        symbol: fill.symbol,
+                        option_type: optionType,
+                        expiration_date: fill.expiry,
+                        strike_price: fill.strike,
+                        quantity: Math.abs(fill.quantity),
+                        side: side,
+                        order_type: 'LIMIT',
+                        price: price
+                    };
+                    placeOrder(orderDetails);
+                    overlay.remove();
+                });
+            })
+            .catch(err => {
+                logError(`Failed to fetch quote for modal: ${err.message}`);
+                content.innerHTML = `<h3>Error</h3><p>Could not fetch price data.</p>`;
+                setTimeout(() => overlay.remove(), 2000);
+            });
     };
 
     const init = async () => {
