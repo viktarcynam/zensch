@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorLogHeader = document.getElementById('error-log-header');
     const errorLogContent = document.getElementById('error-log-content');
     const errorLogToggleIcon = document.getElementById('error-log-toggle-icon');
+    const percentageTicker = document.getElementById('percentage-ticker');
 
     // --- State Management ---
     let accountHash = null;
@@ -44,6 +45,67 @@ document.addEventListener('DOMContentLoaded', () => {
     let accumHistory = [];
     let rsiHistory = [];
     let rsiDailyHistory = [];
+
+    // --- MOCK DATA GENERATOR (for testing without live data) ---
+    let mockPrice = null;
+    let mockDataCounter = 0;
+    const generateMockData = () => {
+        if (mockPrice === null) {
+            mockPrice = parseFloat(strikeInput.value) || 100;
+        }
+
+        mockDataCounter = (mockDataCounter + 1) % 400;
+        let percentageChange = 0;
+
+        if (mockDataCounter < 100) { // Phase 1: Random +/- 0.02%
+            percentageChange = (Math.random() - 0.5) * 2 * 0.0002; // -0.0002 to +0.0002
+        } else if (mockDataCounter < 200) { // Phase 2: Increasing bias +0.01% to +0.05%
+            percentageChange = (0.0001 + Math.random() * 0.0004);
+        } else if (mockDataCounter < 300) { // Phase 3: Decreasing bias -0.01% to -0.05%
+            percentageChange = -(0.0001 + Math.random() * 0.0004);
+        } else { // Phase 4: Random +/- 0.02%
+            percentageChange = (Math.random() - 0.5) * 2 * 0.0002;
+        }
+
+        mockPrice *= (1 + percentageChange);
+
+        // Return a mock object that mimics the real API response structure
+        return Promise.resolve({
+            success: true,
+            data: {
+                underlying: { last: mockPrice },
+                callExpDateMap: {}, // Provide empty objects to prevent errors
+                putExpDateMap: {}
+            }
+        });
+    };
+    // --- END MOCK DATA ---
+
+    const addPercentageToTicker = (percentageChange) => {
+        if (isNaN(percentageChange)) return;
+
+        const item = document.createElement('span');
+        item.className = 'pct-item';
+
+        const value = Math.abs(percentageChange);
+        item.textContent = `${value.toFixed(1)}%`;
+
+        if (percentageChange > 0) {
+            item.classList.add('pct-green');
+        } else if (percentageChange < 0) {
+            item.classList.add('pct-red');
+        }
+
+        percentageTicker.appendChild(item);
+
+        // Keep the DOM from getting too large
+        while (percentageTicker.children.length > 500) {
+            percentageTicker.removeChild(percentageTicker.firstChild);
+        }
+
+        // Scroll to the end
+        percentageTicker.parentElement.scrollLeft = percentageTicker.parentElement.scrollWidth;
+    };
 
     const calculateRSI = (prices, period = 14) => {
         if (prices.length <= period) return [];
@@ -459,8 +521,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!symbol || !strike || !expiry || !accountHash) return;
 
         try {
-            const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
-            const data = await response.json();
+            // --- MOCK DATA ACTIVATION ---
+            const responsePromise = generateMockData();
+            // const responsePromise = fetch(`/api/options/${symbol}/${strike}/${expiry}`).then(res => res.json());
+            // --- END MOCK DATA ACTIVATION ---
+
+            const data = await responsePromise;
+
             if (data.success) {
                 if (data.data.underlying && data.data.underlying.last) {
                     const currentPrice = data.data.underlying.last;
@@ -472,11 +539,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         priceHistory.shift(); // Remove the oldest entry
                     }
 
-                    // --- ACCUM CALCULATION ---
+                    // --- ACCUM and Percentage Ticker CALCULATION ---
                     if (priceHistory.length >= 2) {
                         const previousPrice = priceHistory[priceHistory.length - 2];
                         const delta = currentPrice - previousPrice;
                         accumValue += delta;
+
+                        if (previousPrice !== 0) {
+                            const percentageChange = (delta / previousPrice) * 100;
+                            addPercentageToTicker(percentageChange);
+                        }
                     }
                     accumHistory.push(accumValue);
                     if (accumHistory.length > 200) {
@@ -665,7 +737,10 @@ document.addEventListener('DOMContentLoaded', () => {
         accumHistory = [];
         rsiHistory = [];
         rsiDailyHistory = [];
+        mockPrice = null; // Reset mock price for new instrument
+        mockDataCounter = 0;
         currentPriceEl.textContent = '-.--';
+        if(percentageTicker) percentageTicker.innerHTML = '';
         drawAccumChart(); // Clear the canvas
         drawRsiChart(); // Clear the canvas
         drawRsiDailyChart(); // Clear the canvas
