@@ -490,13 +490,44 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(overlay);
     };
 
-    const showCloseOrderModal = (fill, fillDiv) => {
+    const showCloseOrderModal = async (fill, fillDiv) => {
         const existingModal = document.querySelector('.modal-overlay');
         if (existingModal) existingModal.remove();
 
         // Highlight the clicked fill and remove highlight from others
         document.querySelectorAll('.fill-item.active-fill').forEach(el => el.classList.remove('active-fill'));
         if (fillDiv) fillDiv.classList.add('active-fill');
+
+        const isClosingBuy = fill.quantity < 0;
+        const side = isClosingBuy ? 'BUY_TO_CLOSE' : 'SELL_TO_CLOSE';
+        const optionType = fill.putCall === 'C' ? 'CALL' : 'PUT';
+
+        // --- Safety Check 1: See if a closing order already exists ---
+        const existingClosingOrder = instrumentOrders.find(o => o.side === side);
+        if (existingClosingOrder) {
+            showWarningModal("Duplicate Order", "A closing order for this instrument is already working.", fillDiv);
+            return;
+        }
+
+        // --- Safety Check 2: Verify the position still exists ---
+        try {
+            const posResponse = await fetch(`/api/instrument_position?account_hash=${accountHash}&symbol=${fill.symbol}&strike=${fill.strike}&expiry=${fill.expiry}`);
+            const posData = await posResponse.json();
+            if (posData.success) {
+                const currentQuantity = optionType === 'CALL' ? posData.call_quantity : posData.put_quantity;
+                const positionExists = isClosingBuy ? currentQuantity < 0 : currentQuantity > 0;
+                if (!positionExists) {
+                    showWarningModal("No Position", "There is no existing position to close.", fillDiv);
+                    return;
+                }
+            } else {
+                 showWarningModal("Position Check Failed", "Could not verify if position exists.", fillDiv);
+                 return;
+            }
+        } catch (error) {
+            showWarningModal("Position Check Failed", `API Error: ${error.message}`, fillDiv);
+            return;
+        }
 
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
@@ -604,6 +635,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (fillDiv) fillDiv.classList.remove('active-fill');
                 setTimeout(() => overlay.remove(), 2000);
             });
+    };
+
+    const showWarningModal = (title, message, elementToClear) => {
+        const existingModal = document.querySelector('.modal-overlay');
+        if (existingModal) existingModal.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const content = document.createElement('div');
+        content.className = 'modal-content';
+
+        content.innerHTML = `
+            <h3 class="modal-title" style="color: #d9534f;">${title}</h3>
+            <p style="text-align: center;">${message}</p>
+            <div class="modal-buttons">
+                <button id="modal-ok-btn" class="order-btn">OK</button>
+            </div>
+        `;
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+
+        const closeModal = () => {
+            if (elementToClear) elementToClear.classList.remove('active-fill');
+            overlay.remove();
+        }
+
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+        document.getElementById('modal-ok-btn').addEventListener('click', closeModal);
     };
 
     const showWorkingOrderModal = (order, orderDiv) => {
