@@ -150,6 +150,59 @@ def get_defaults(symbol):
                 return jsonify({"success": False, "error": "Could not parse last price."}), 500
     return jsonify({"success": False, "error": f"Could not retrieve quote for {symbol}."}), 404
 
+
+@app.route('/api/strikes/<symbol>/<expiry>', methods=['GET'])
+def get_strikes(symbol, expiry):
+    """
+    Fetches a list of valid strike prices for a given symbol and expiration.
+    Also returns the underlying price to help the frontend select a default.
+    """
+    with SchwabClient() as client:
+        # Use strikeCount to get a range of strikes around the current price
+        chain_response = client.get_option_chains(
+            symbol=symbol.upper(),
+            contractType='ALL',
+            strikeCount=20,
+            fromDate=expiry,
+            toDate=expiry,
+            includeUnderlyingQuote=True  # Make sure we get the price
+        )
+
+    if not chain_response.get('success'):
+        return jsonify({"success": False, "error": "Failed to retrieve option chain from server."}), 500
+
+    data = chain_response.get('data', {})
+    if data.get('status') != 'SUCCESS':
+        return jsonify({"success": False, "error": f"API Error: {data.get('status')}"}), 500
+
+    all_strikes = set()
+
+    # The API returns strikes as keys in a map. We extract from both calls and puts.
+    call_map = data.get('callExpDateMap', {})
+    if call_map:
+        # The key is the actual expiration date string, e.g., "2025-09-19:35"
+        # We just need the first (and only) one.
+        date_key = next(iter(call_map))
+        for strike in call_map[date_key]:
+            all_strikes.add(float(strike))
+
+    put_map = data.get('putExpDateMap', {})
+    if put_map:
+        date_key = next(iter(put_map))
+        for strike in put_map[date_key]:
+            all_strikes.add(float(strike))
+
+    if not all_strikes:
+        return jsonify({"success": False, "error": "No strikes found for the given expiry."}), 404
+
+    sorted_strikes = sorted(list(all_strikes))
+    return jsonify({
+        "success": True,
+        "strikes": sorted_strikes,
+        "underlying_price": data.get('underlyingPrice')
+    })
+
+
 @app.route('/api/positions/<symbol>', methods=['GET'])
 def get_positions(symbol):
     account_hash = request.args.get('account_hash')

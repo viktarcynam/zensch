@@ -107,6 +107,56 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const fetchStrikes = async () => {
+        const symbol = symbolInput.value.trim().toUpperCase();
+        const expiry = expiryInput.value;
+        const strikeList = document.getElementById('strike-list');
+
+        // Clear previous results and state
+        strikeList.innerHTML = '';
+        strikeInput.value = '';
+        strikeInput.placeholder = "Loading...";
+
+        if (!symbol || !expiry) {
+            strikeInput.placeholder = "Strike";
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/strikes/${symbol}/${expiry}`);
+            const data = await response.json();
+
+            if (data.success && data.strikes && data.strikes.length > 0) {
+                // Populate the datalist with strike options
+                data.strikes.forEach(strike => {
+                    const option = document.createElement('option');
+                    option.value = strike;
+                    strikeList.appendChild(option);
+                });
+
+                // Find and set the closest strike as the default value in the input
+                const underlyingPrice = data.underlying_price;
+                if (underlyingPrice) {
+                    const closestStrike = data.strikes.reduce((prev, curr) => {
+                        return (Math.abs(curr - underlyingPrice) < Math.abs(prev - underlyingPrice) ? curr : prev);
+                    });
+                    strikeInput.value = closestStrike;
+                } else if (data.strikes.length > 0) {
+                    // Fallback if no price is returned: use the middle strike
+                    strikeInput.value = data.strikes[Math.floor(data.strikes.length / 2)];
+                }
+
+                // Trigger quote fetch for the new default strike
+                handleInputChange();
+            } else {
+                strikeInput.placeholder = data.error || "No strikes";
+            }
+        } catch (error) {
+            logError(`Error fetching strikes: ${error.message}`);
+            strikeInput.placeholder = "Error";
+        }
+    };
+
     const fetchAndSetDefaults = async () => {
         const symbol = symbolInput.value.trim().toUpperCase();
         if (!symbol) return;
@@ -114,9 +164,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/defaults/${symbol}`);
             const data = await response.json();
             if (data.success) {
-                strikeInput.value = data.strike;
+                // Set the default expiry, then fetch the strike list
                 expiryInput.value = data.expiry;
-                handleInputChange();
+                await fetchStrikes();
             } else {
                 setStatus(`Error fetching defaults: ${data.error}`, true);
             }
@@ -418,8 +468,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     symbolInput.addEventListener('change', fetchAndSetDefaults);
-    strikeInput.addEventListener('input', handleInputChange);
-    expiryInput.addEventListener('input', handleInputChange);
+    expiryInput.addEventListener('input', fetchStrikes);
+    strikeInput.addEventListener('input', handleInputChange); // 'input' is better for datalist
 
     useBtn.addEventListener('click', async () => {
         fetchQuoteAndInstrumentPosition(true);

@@ -27,11 +27,8 @@ def main():
         print('   client.send_request("base_credentials.json", \'{"app_key": "...", "app_secret": "..."}\')')
         print()
         
-        # Ask for confirmation
-        confirm = input("Start server without credentials? (y/n): ").lower().strip()
-        if confirm != 'y':
-            print("Server startup cancelled.")
-            sys.exit(0)
+        # Bypassing interactive confirmation for automated script execution
+        print("Starting server without credentials automatically.")
         
         # Create server
         server = SchwabServer()

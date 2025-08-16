@@ -20,7 +20,8 @@
 
             <!-- Line 2: Strike, Position, Expiry -->
             <div class="control-line" id="strike-expiry-line">
-                <input type="number" id="strike-input" class="strike-input" placeholder="Strike">
+                <input type="number" id="strike-input" class="strike-input" placeholder="Strike" list="strike-list">
+                <datalist id="strike-list"></datalist>
                 <div id="instrument-position-group">
                     <div id="call-position-display" class="instrument-position">C:0</div>
                     <div id="put-position-display" class="instrument-position">P:0</div>
