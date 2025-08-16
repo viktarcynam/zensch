@@ -122,9 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success && data.orders) {
                 workingOrdersScroller.innerHTML = '';
                 data.orders.forEach(order => {
-                    const leg = order.orderLegCollection[0];
-                    const instrument = leg.instrument;
-                    const orderString = `${leg.instruction.split('_')[0]} ${leg.quantity} ${instrument.underlyingSymbol} ${instrument.description.split(' ')[-2]} ${instrument.putCall[0]} @ ${order.price.toFixed(2)}`;
+                    // The 'order' object here is the flattened, standardized object from the cache
+                    const orderString = `${order.side.split('_')[0]} ${order.quantity} ${order.symbol} ${order.strike_price} ${order.option_type[0]} @ ${order.price.toFixed(2)}`;
                     const orderDiv = document.createElement('div');
                     orderDiv.className = 'working-order-item';
                     orderDiv.textContent = orderString;
@@ -615,9 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = document.createElement('div');
         content.className = 'modal-content';
 
-        const leg = order.orderLegCollection[0];
-        const instrument = leg.instrument;
-        const title = `WORKING ORDER: ${leg.instruction.split('_')[0]} ${leg.quantity} ${instrument.underlyingSymbol} ${instrument.description.split(' ')[-2]} ${instrument.putCall[0]}`;
+        const title = `WORKING ORDER: ${order.side.split('_')[0]} ${order.quantity} ${order.symbol} ${order.strike_price} ${order.option_type[0]}`;
 
         content.innerHTML = `
             <h3 class="modal-title">${title}</h3>
@@ -661,14 +658,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // The backend will ensure quantity and side are preserved.
             const orderDetails = {
                 account_id: accountHash,
-                order_id: order.orderId, // Important for replacement
-                symbol: instrument.underlyingSymbol,
-                option_type: instrument.putCall,
-                expiration_date: instrument.parsed_expiration, // Use pre-parsed value
-                strike_price: instrument.parsed_strike,       // Use pre-parsed value
-                quantity: leg.quantity,
-                side: leg.instruction,
-                order_type: order.orderType,
+                order_id: order.order_id, // Important for replacement
+                symbol: order.symbol,
+                option_type: order.option_type,
+                expiration_date: order.expiration_date,
+                strike_price: order.strike_price,
+                quantity: order.quantity,
+                side: order.side,
+                order_type: order.order_type,
                 price: newPrice
             };
             placeOrder(orderDetails);
