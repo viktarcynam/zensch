@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let priceHistory = []; // Array to store price history for the current instrument
     let accumValue = 0;
     let accumHistory = [];
+    let rsiHistory = [];
 
     // --- MOCK DATA GENERATOR (for testing without live data) ---
     let mockPrice = null;
@@ -77,6 +78,88 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
     // --- END MOCK DATA ---
+
+    const calculateRSI = (prices, period = 14) => {
+        if (prices.length <= period) return [];
+
+        let gains = [];
+        let losses = [];
+        let rsiValues = [];
+
+        // Calculate initial changes
+        for (let i = 1; i <= period; i++) {
+            const change = prices[i] - prices[i - 1];
+            if (change > 0) {
+                gains.push(change);
+                losses.push(0);
+            } else {
+                gains.push(0);
+                losses.push(Math.abs(change));
+            }
+        }
+
+        let avgGain = gains.reduce((a, b) => a + b, 0) / period;
+        let avgLoss = losses.reduce((a, b) => a + b, 0) / period;
+
+        let rs = avgLoss === 0 ? Infinity : avgGain / avgLoss;
+        rsiValues.push(100 - (100 / (1 + rs)));
+
+        // Calculate subsequent RSI values
+        for (let i = period + 1; i < prices.length; i++) {
+            const change = prices[i] - prices[i - 1];
+            let gain = change > 0 ? change : 0;
+            let loss = change < 0 ? Math.abs(change) : 0;
+
+            avgGain = (avgGain * (period - 1) + gain) / period;
+            avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+            rs = avgLoss === 0 ? Infinity : avgGain / avgLoss;
+            rsiValues.push(100 - (100 / (1 + rs)));
+        }
+
+        return rsiValues;
+    };
+
+
+    const drawRsiChart = () => {
+        const canvas = document.getElementById('rsi-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (rsiHistory.length < 2) return;
+
+        const mapY = (val) => canvas.height - (val / 100) * canvas.height;
+        const mapX = (index) => (index / (rsiHistory.length - 1)) * canvas.width;
+
+        // Draw reference lines at 30 and 70
+        [30, 70].forEach(level => {
+            const y = mapY(level);
+            ctx.beginPath();
+            ctx.strokeStyle = '#555';
+            ctx.setLineDash([2, 2]);
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Draw RSI line
+        ctx.beginPath();
+        ctx.strokeStyle = '#d8a0ff'; // Purple color
+        ctx.lineWidth = 1.5;
+        rsiHistory.forEach((point, index) => {
+            const x = mapX(index);
+            const y = mapY(point);
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    };
+
 
     const drawAccumChart = () => {
         const canvas = document.getElementById('accum-chart');
@@ -515,6 +598,48 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus(statusHTML);
     };
 
+    const fetchHistoryAndDrawCharts = async (symbol) => {
+        let attempts = 0;
+        const maxAttempts = 5;
+        const interval = 2000; // 2 seconds
+
+        const attemptFetch = async () => {
+            if (attempts >= maxAttempts) {
+                logError(`Failed to fetch history for ${symbol} after ${maxAttempts} attempts.`);
+                return;
+            }
+            attempts++;
+
+            try {
+                const response = await fetch(`/api/get_history/${symbol}`);
+                if (response.status === 404) {
+                    // Data not ready, try again
+                    setTimeout(attemptFetch, interval);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+
+                if (result.success && result.data.data.data_30m && result.data.data.data_30m.candles) {
+                    const prices = result.data.data.data_30m.candles.map(c => c.close);
+                    rsiHistory = calculateRSI(prices);
+                    drawRsiChart();
+                } else {
+                    logError(`Could not process 30m history for ${symbol}.`);
+                    rsiHistory = [];
+                    drawRsiChart();
+                }
+            } catch (error) {
+                logError(`Error in fetchHistoryAndDrawCharts for ${symbol}: ${error.message}`);
+                setTimeout(attemptFetch, interval); // Retry on network error
+            }
+        };
+
+        await attemptFetch();
+    };
+
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
         if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
@@ -523,10 +648,12 @@ document.addEventListener('DOMContentLoaded', () => {
         priceHistory = [];
         accumValue = 0;
         accumHistory = [];
+        rsiHistory = [];
         mockPrice = null; // Reset mock price for new instrument
         mockDataCounter = 0;
         currentPriceEl.textContent = '-.--';
         drawAccumChart(); // Clear the canvas
+        drawRsiChart(); // Clear the canvas
 
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
@@ -543,6 +670,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(data => {
                     if (data.success) {
                         console.log(`History request for ${symbol} sent. Status: ${data.status}`);
+                        // If data is already cached, fetch it immediately. Otherwise, start polling.
+                        if (data.status === 'CACHED') {
+                            fetchHistoryAndDrawCharts(symbol);
+                        } else {
+                             setTimeout(() => fetchHistoryAndDrawCharts(symbol), 2000); // Wait a bit before first attempt
+                        }
                     } else {
                         logError(`History request for ${symbol} failed: ${data.error}`);
                     }
