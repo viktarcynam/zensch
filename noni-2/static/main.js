@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     fillDiv.className = 'fill-item';
                     fillDiv.textContent = fillString;
 
-                    fillDiv.addEventListener('click', () => showCloseOrderModal(fill));
+                    fillDiv.addEventListener('click', () => showCloseOrderModal(fill, fillDiv));
                     fillsScroller.appendChild(fillDiv);
                 });
             }
@@ -459,9 +459,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(overlay);
     };
 
-    const showCloseOrderModal = (fill) => {
+    const showCloseOrderModal = (fill, fillDiv) => {
         const existingModal = document.querySelector('.modal-overlay');
         if (existingModal) existingModal.remove();
+
+        // Highlight the clicked fill and remove highlight from others
+        document.querySelectorAll('.fill-item.active-fill').forEach(el => el.classList.remove('active-fill'));
+        if (fillDiv) fillDiv.classList.add('active-fill');
 
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
@@ -510,7 +514,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h3 class="modal-title">${title}</h3>
                     <div class="modal-price-input-wrapper">
                         <label for="modal-price-input">Price:</label>
-                        <input type="number" id="modal-price-input" class="order-input" step="0.01" value="${defaultPrice.toFixed(2)}">
+                        <div class="price-adjust-wrapper">
+                             <button class="price-adjust-btn" data-target="modal-price-input" data-amount="-0.01">-</button>
+                             <input type="number" id="modal-price-input" class="order-input" step="0.01" value="${defaultPrice.toFixed(2)}">
+                             <button class="price-adjust-btn" data-target="modal-price-input" data-amount="0.01">+</button>
+                        </div>
                     </div>
                     <div class="modal-buttons">
                         <button id="modal-cancel-btn" class="control-btn">Cancel</button>
@@ -518,7 +526,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
 
-                document.getElementById('modal-cancel-btn').addEventListener('click', () => overlay.remove());
+                const closeModal = () => {
+                    if (fillDiv) fillDiv.classList.remove('active-fill');
+                    overlay.remove();
+                };
+
+                overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+                document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+                content.querySelectorAll('.price-adjust-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const button = e.currentTarget;
+                        const targetInputId = button.dataset.target;
+                        const amount = parseFloat(button.dataset.amount);
+                        const targetInput = document.getElementById(targetInputId);
+                        if (targetInput) {
+                            const currentValue = parseFloat(targetInput.value) || 0;
+                            const newValue = currentValue + amount;
+                            targetInput.value = Math.max(0, newValue).toFixed(2);
+                        }
+                    });
+                });
                 document.getElementById('modal-submit-btn').addEventListener('click', () => {
                     const price = parseFloat(document.getElementById('modal-price-input').value);
                     if (!price || price <= 0) {
@@ -537,12 +564,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         price: price
                     };
                     placeOrder(orderDetails);
-                    overlay.remove();
+                    closeModal();
                 });
             })
             .catch(err => {
                 logError(`Failed to fetch quote for modal: ${err.message}`);
                 content.innerHTML = `<h3>Error</h3><p>Could not fetch price data.</p>`;
+                if (fillDiv) fillDiv.classList.remove('active-fill');
                 setTimeout(() => overlay.remove(), 2000);
             });
     };

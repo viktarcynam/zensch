@@ -43,6 +43,12 @@ body {
     cursor: pointer;
 }
 
+.fill-item.active-fill {
+    background-color: #5a5e61; /* A slightly lighter, more prominent background */
+    border-left: 3px solid #ffc107;
+    padding-left: 7px; /* Adjust padding to account for border */
+}
+
 .container {
     width: 100%;
     max-width: 600px;
