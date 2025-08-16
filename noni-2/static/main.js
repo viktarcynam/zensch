@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let quotePollInterval = null;
     let instrumentStatusInterval = null;
     let instrumentOrders = []; // The single source of truth for active orders for the current instrument.
+    let strikeInputOriginalValue = ''; // Store strike value before clearing for datalist display
 
     // --- Helper Functions ---
     const logErrorToUI = (message) => {
@@ -470,6 +471,21 @@ document.addEventListener('DOMContentLoaded', () => {
     symbolInput.addEventListener('change', fetchAndSetDefaults);
     expiryInput.addEventListener('input', fetchStrikes);
     strikeInput.addEventListener('input', handleInputChange); // 'input' is better for datalist
+
+    // This trick clears the input on click to show the full datalist,
+    // then restores the value if the user clicks away.
+    strikeInput.addEventListener('mousedown', () => {
+        if (strikeInput.value) {
+            strikeInputOriginalValue = strikeInput.value;
+            strikeInput.value = '';
+        }
+    });
+
+    strikeInput.addEventListener('blur', () => {
+        if (!strikeInput.value && strikeInputOriginalValue) {
+            strikeInput.value = strikeInputOriginalValue;
+        }
+    });
 
     useBtn.addEventListener('click', async () => {
         fetchQuoteAndInstrumentPosition(true);
