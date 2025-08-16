@@ -281,29 +281,15 @@ def get_recent_fills():
 
 @app.route('/api/working_orders', methods=['GET'])
 def get_working_orders():
-    account_hash = request.args.get('account_hash')
-    if not account_hash: return jsonify({"success": False, "error": "Account hash required."}), 400
-    with SchwabClient() as client:
-        # We don't need a date filter here, as we want all working orders.
-        orders_response = client.get_option_orders(
-            account_id=account_hash,
-            status='WORKING'
-        )
-        if orders_response.get('success'):
-            orders = orders_response.get('data', [])
-            # Pre-parse the description to make the frontend's job easier and more robust
-            for order in orders:
-                try:
-                    instrument = order['orderLegCollection'][0]['instrument']
-                    parsed_desc = parse_instrument_description(instrument.get('description'))
-                    if parsed_desc:
-                        # Add the parsed details directly to the instrument object for easy access
-                        instrument['parsed_expiration'] = parsed_desc.get('expiry')
-                        instrument['parsed_strike'] = parsed_desc.get('strike')
-                except (IndexError, KeyError):
-                    continue # Skip orders that don't have the expected structure
-            return jsonify({"success": True, "orders": orders})
-    return jsonify({"success": False, "error": "Could not retrieve working orders."}), 500
+    """
+    Returns a list of all active orders from the in-memory cache,
+    which is maintained by the background poller.
+    """
+    with CACHE_LOCK:
+        # The ACTIVE_ORDERS dict values are the order details objects.
+        # The poller already includes both WORKING and PENDING_ACTIVATION orders.
+        orders = list(ACTIVE_ORDERS.values())
+    return jsonify({"success": True, "orders": orders})
 
 
 @app.route('/api/options/<symbol>/<strike>/<expiry>', methods=['GET'])
