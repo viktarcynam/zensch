@@ -123,7 +123,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 workingOrdersScroller.innerHTML = '';
                 data.orders.forEach(order => {
                     // The 'order' object here is the flattened, standardized object from the cache
-                    const orderString = `${order.side.split('_')[0]} ${order.quantity} ${order.symbol} ${order.strike_price} ${order.option_type[0]} @ ${order.price.toFixed(2)}`;
+                    const expiryDate = new Date(order.expiration_date + 'T00:00:00');
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const dte = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+                    const orderString = `${order.side.split('_')[0]} ${order.quantity} ${order.symbol} ${order.strike_price} ${order.option_type[0]} DTE:${dte} @ ${order.price.toFixed(2)}`;
                     const orderDiv = document.createElement('div');
                     orderDiv.className = 'working-order-item';
                     orderDiv.textContent = orderString;
@@ -614,7 +618,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = document.createElement('div');
         content.className = 'modal-content';
 
-        const title = `WORKING ORDER: ${order.side.split('_')[0]} ${order.quantity} ${order.symbol} ${order.strike_price} ${order.option_type[0]}`;
+        const expiryDate = new Date(order.expiration_date + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dte = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+        const title = `WORKING ORDER: ${order.side.split('_')[0]} ${order.quantity} ${order.symbol} ${order.strike_price} ${order.option_type[0]} DTE:${dte}`;
 
         content.innerHTML = `
             <h3 class="modal-title">${title}</h3>
