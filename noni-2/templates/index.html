@@ -7,15 +7,23 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="main-container">
-        <div id="price-scroller" class="scroller-box price-scroller"></div>
-
-        <div class="container">
-            <!-- Line 1: Symbol, Position -->
-            <div class="control-line">
+    <div class="app-wrapper">
+        <div id="price-ticker-container">
+            <div id="price-ticker">
+                <!-- Prices will be injected here by JS -->
+            </div>
+        </div>
+        <div class="main-container">
+            <div class="container">
+                <!-- Line 1: Symbol, Position -->
+                <div class="control-line">
                 <input type="text" id="symbol-input" class="symbol-input" placeholder="SYM" maxlength="5">
                 <button id="use-btn" class="control-btn" disabled>Use</button>
                 <div id="position-display" class="position-display"></div>
+                <div id="quantity-container" class="quantity-container">
+                    <label for="quantity-input" class="quantity-label">Qty</label>
+                    <input type="number" id="quantity-input" class="quantity-input" value="1" min="1" step="1">
+                </div>
             </div>
 
             <!-- Line 2: Strike, Position, Expiry -->
@@ -26,7 +34,10 @@
                     <div id="call-position-display" class="instrument-position">C:0</div>
                     <div id="put-position-display" class="instrument-position">P:0</div>
                 </div>
-                <input type="date" id="expiry-input" class="expiry-input">
+                <div class="expiry-group">
+                    <input type="number" id="dte-input" class="dte-input" placeholder="DTE" min="0">
+                    <input type="date" id="expiry-input" class="expiry-input">
+                </div>
             </div>
 
             <!-- Line 3: Option Quotes -->
@@ -41,12 +52,6 @@
                     <div class="quote-item" data-label="a:"><span id="put-ask">-.--</span></div>
                     <div class="quote-item" data-label="vol:"><span id="put-vol">--</span></div>
                 </div>
-            </div>
-
-            <!-- Quantity Input -->
-            <div class="control-line" id="quantity-line">
-                <label for="quantity-input" class="quantity-label">Qty:</label>
-                <input type="number" id="quantity-input" class="quantity-input" value="1" min="1" step="1">
             </div>
 
             <!-- Order Entry -->

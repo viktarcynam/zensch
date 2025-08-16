@@ -8,6 +8,43 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    flex-direction: column; /* Change to column for top-level layout */
+}
+
+@keyframes ticker-scroll {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-100%);
+    }
+}
+
+.app-wrapper {
+    width: 100%;
+}
+
+#price-ticker-container {
+    width: 100%;
+    background-color: #313335;
+    border: 1px solid #555;
+    overflow: hidden;
+    padding: 5px 0;
+    margin-bottom: 10px;
+    white-space: nowrap;
+}
+
+#price-ticker {
+    display: inline-block;
+    padding-left: 100%;
+    animation: ticker-scroll 60s linear infinite;
+}
+
+#price-ticker .price-item {
+    display: inline-block;
+    padding: 0 15px;
+    font-size: 0.9em;
+    color: #a9b7c6;
 }
 
 .main-container {
@@ -30,9 +67,7 @@ body {
 .scroller-box div {
     padding: 2px 0;
 }
-.price-scroller {
-    width: 120px; /* Narrower for just price */
-}
+
 .fills-scroller {
     width: 220px; /* Wider to prevent wrapping */
     font-size: 0.7em; /* Reduced font size by ~25% from 0.9em */
@@ -106,10 +141,35 @@ input:focus {
 .strike-input {
     width: 100px;
 }
-input[type="date"].expiry-input {
-    width: 130px;
+
+.expiry-group {
+    display: flex;
+    gap: 5px;
+}
+.dte-input {
+    width: 50px;
+}
+.expiry-input {
     min-width: 130px;
 }
+
+.quantity-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.quantity-label {
+    font-size: 0.75rem;
+    color: #888;
+}
+.quantity-input {
+    width: 40px;
+    height: 20px;
+    padding: 4px;
+    font-size: 0.9rem;
+}
+
 
 .control-btn {
     background-color: #555;

@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const positionDisplay = document.getElementById('position-display');
     const strikeInput = document.getElementById('strike-input');
     const expiryInput = document.getElementById('expiry-input');
+    const dteInput = document.getElementById('dte-input');
     const callBidEl = document.getElementById('call-bid');
     const callAskEl = document.getElementById('call-ask');
     const callVolEl = document.getElementById('call-vol');
@@ -25,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const putPositionDisplay = document.getElementById('put-position-display');
     const cancelBtn = document.getElementById('cancel-btn');
     const fillsScroller = document.getElementById('fills-scroller');
-    const priceScroller = document.getElementById('price-scroller');
+    const priceTicker = document.getElementById('price-ticker');
     const errorLogContainer = document.getElementById('error-log-container');
     const errorLogHeader = document.getElementById('error-log-header');
     const errorLogContent = document.getElementById('error-log-content');
@@ -251,11 +252,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.success) {
                 if (data.data.underlying) {
-                    const priceDiv = document.createElement('div');
-                    priceDiv.textContent = data.data.underlying.last.toFixed(2);
-                    priceScroller.insertBefore(priceDiv, priceScroller.firstChild);
-                    while (priceScroller.children.length > 50) {
-                        priceScroller.removeChild(priceScroller.lastChild);
+                    const priceSpan = document.createElement('span');
+                    priceSpan.className = 'price-item';
+                    priceSpan.textContent = data.data.underlying.last.toFixed(2);
+                    priceTicker.appendChild(priceSpan);
+
+                    // To keep the ticker from getting infinitely long
+                    while (priceTicker.children.length > 100) {
+                        priceTicker.removeChild(priceTicker.firstChild);
                     }
                 }
                 const callMap = data.data.callExpDateMap, putMap = data.data.putExpDateMap;
@@ -373,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
         if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
-        priceScroller.innerHTML = '';
+        priceTicker.innerHTML = ''; // Clear the ticker
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
@@ -596,7 +600,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     symbolInput.addEventListener('change', fetchAndSetDefaults);
-    expiryInput.addEventListener('input', fetchStrikes);
+
+    dteInput.addEventListener('input', () => {
+        const dte = parseInt(dteInput.value, 10);
+        if (!isNaN(dte) && dte >= 0) {
+            const today = new Date();
+            today.setDate(today.getDate() + dte);
+            // Format to YYYY-MM-DD for the date input
+            expiryInput.value = today.toISOString().split('T')[0];
+            fetchStrikes(); // Fetch new strikes for the updated date
+        }
+    });
+
+    expiryInput.addEventListener('input', () => {
+        if (expiryInput.value) {
+            const selectedDate = new Date(expiryInput.value + 'T00:00:00');
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diffTime = selectedDate - today;
+            const dte = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            dteInput.value = dte;
+        }
+        fetchStrikes();
+    });
+
     strikeInput.addEventListener('input', handleInputChange); // 'input' is better for datalist
 
     // This trick clears the input on click to show the full datalist,
