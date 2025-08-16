@@ -235,8 +235,14 @@ def get_recent_fills():
     account_hash = request.args.get('account_hash')
     if not account_hash: return jsonify({"success": False, "error": "Account hash required."}), 400
     with SchwabClient() as client:
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        orders_response = client.get_option_orders(account_id=account_hash, status='FILLED', from_entered_time=f"{today_str}T00:00:00Z", to_entered_time=f"{today_str}T23:59:59Z")
+        # Fetch fills from the last 2 days up to the current time.
+        from_date = datetime.now() - timedelta(days=2)
+        from_date_str = from_date.strftime('%Y-%m-%d')
+        orders_response = client.get_option_orders(
+            account_id=account_hash,
+            status='FILLED',
+            from_entered_time=f"{from_date_str}T00:00:00Z"
+        )
         if orders_response.get('success') and orders_response.get('data'):
             filled_orders_data = []
             for order in orders_response.get('data', []):
