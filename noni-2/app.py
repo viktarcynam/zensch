@@ -444,6 +444,44 @@ def get_instrument_orders():
                 found_orders.append(order_info)
     return jsonify({"success": True, "orders": found_orders})
 
+
+@app.route('/api/request_history/<symbol>', methods=['POST'])
+def request_history(symbol):
+    """
+    Endpoint to trigger a non-blocking request to fetch and cache historical data for a symbol.
+    """
+    if not symbol:
+        return jsonify({"success": False, "error": "Symbol is required"}), 400
+
+    with SchwabClient() as client:
+        response = client.request_history(symbol)
+
+    if response.get('success'):
+        return jsonify(response), 200
+    else:
+        return jsonify(response), 500
+
+
+@app.route('/api/get_history/<symbol>', methods=['GET'])
+def get_history(symbol):
+    """
+    Endpoint to retrieve cached historical data for a symbol.
+    """
+    if not symbol:
+        return jsonify({"success": False, "error": "Symbol is required"}), 400
+
+    with SchwabClient() as client:
+        response = client.get_history(symbol)
+
+    if response.get('success'):
+        return jsonify(response), 200
+    else:
+        # Return 404 if the specific error is 'No history found'
+        if "No history found" in response.get('error', ''):
+            return jsonify(response), 404
+        return jsonify(response), 500
+
+
 if __name__ == '__main__':
     # Start the background poller thread
     poller_thread = threading.Thread(target=background_poller, daemon=True)

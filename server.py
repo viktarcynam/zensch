@@ -19,7 +19,9 @@ from quotes_service import quotes_service
 from options_service import options_service
 from stock_orders_service import stock_orders_service
 from option_orders_service import option_orders_service
+from history_service import history_service
 from state_manager import state_manager
+from datetime import date
 
 # Configure logging
 logging.basicConfig(
@@ -50,6 +52,8 @@ class SchwabServer:
         self.authenticator = None
         self.account_service = None
         self.positions_service = None
+        self.HISTORY_CACHE = {}
+        self.HISTORY_CACHE_LOCK = threading.Lock()
 
         # Load the persistent state
         state_manager._load_state()
@@ -92,6 +96,7 @@ class SchwabServer:
             options_service.set_client(self.authenticator.client)
             stock_orders_service.set_client(self.authenticator.client, self.account_service)
             option_orders_service.set_client(self.authenticator.client, self.account_service)
+            history_service.set_client(self.authenticator.client)
 
             # streaming_service.set_client(self.authenticator.client)
             
@@ -162,6 +167,23 @@ class SchwabServer:
         self.stop()
         sys.exit(0)
     
+    def _fetch_history_task(self, symbol: str):
+        """
+        Task to be run in a background thread to fetch and cache history.
+        """
+        logger.info(f"Starting background fetch for history of {symbol}...")
+        result = history_service.fetch_history_for_symbol(symbol)
+
+        if result.get("success"):
+            with self.HISTORY_CACHE_LOCK:
+                self.HISTORY_CACHE[symbol] = {
+                    "fetch_date": date.today().isoformat(),
+                    "data": result.get("data")
+                }
+            logger.info(f"Successfully cached historical data for {symbol}.")
+        else:
+            logger.error(f"Background fetch failed for {symbol}: {result.get('error')}")
+
     def _handle_client(self, client_socket: socket.socket, address: tuple):
         """
         Handle individual client connections.
@@ -562,6 +584,37 @@ class SchwabServer:
                 result = option_orders_service.get_option_orders(account_id, status, max_results, from_entered_time, to_entered_time)
                 result['timestamp'] = timestamp
                 return result
+
+            # History Service Actions
+            elif action == 'request_history':
+                symbol = request.get('symbol')
+                if not symbol:
+                    return {'success': False, 'error': 'Symbol is required.', 'timestamp': timestamp}
+
+                with self.HISTORY_CACHE_LOCK:
+                    cached_data = self.HISTORY_CACHE.get(symbol)
+                    if cached_data and cached_data.get('fetch_date') == date.today().isoformat():
+                        return {'success': True, 'message': 'History for today already cached.', 'status': 'CACHED', 'timestamp': timestamp}
+
+                # If not cached for today, start a background fetch
+                thread = threading.Thread(target=self._fetch_history_task, args=(symbol,))
+                thread.daemon = True
+                thread.start()
+
+                return {'success': True, 'message': 'Request to fetch history received.', 'status': 'FETCHING', 'timestamp': timestamp}
+
+            elif action == 'get_history':
+                symbol = request.get('symbol')
+                if not symbol:
+                    return {'success': False, 'error': 'Symbol is required.', 'timestamp': timestamp}
+
+                with self.HISTORY_CACHE_LOCK:
+                    cached_data = self.HISTORY_CACHE.get(symbol)
+
+                if cached_data:
+                    return {'success': True, 'data': cached_data, 'timestamp': timestamp}
+                else:
+                    return {'success': False, 'error': 'No history found for symbol.', 'timestamp': timestamp}
             
             else:
                 return {
@@ -574,7 +627,8 @@ class SchwabServer:
                         'place_stock_order', 'cancel_stock_order', 'replace_stock_order', 
                         'get_stock_order_details', 'get_stock_orders',
                         'place_option_order', 'cancel_option_order', 'replace_option_order',
-                        'get_option_order_details', 'get_option_orders'
+                        'get_option_order_details', 'get_option_orders',
+                        'request_history', 'get_history'
                     ],
                     'timestamp': timestamp
                 }

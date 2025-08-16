@@ -322,6 +322,38 @@ class SchwabClient:
             request['account_hash'] = account_hash
         
         return self.send_request(request)
+
+    def request_history(self, symbol: str) -> Dict[str, Any]:
+        """
+        Sends a non-blocking request to the server to start fetching historical data for a symbol.
+
+        Args:
+            symbol: The stock symbol to fetch history for.
+
+        Returns:
+            Dict containing the server's immediate response.
+        """
+        request = {
+            'action': 'request_history',
+            'symbol': symbol
+        }
+        return self.send_request(request)
+
+    def get_history(self, symbol: str) -> Dict[str, Any]:
+        """
+        Retrieves cached historical data for a symbol from the server.
+
+        Args:
+            symbol: The stock symbol to get cached history for.
+
+        Returns:
+            Dict containing the cached data or an error if not found.
+        """
+        request = {
+            'action': 'get_history',
+            'symbol': symbol
+        }
+        return self.send_request(request)
     
     def __enter__(self):
         """Context manager entry."""

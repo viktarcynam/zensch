@@ -536,6 +536,19 @@ document.addEventListener('DOMContentLoaded', () => {
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
             pollInstrumentOrders();
             instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
+
+            // Fire-and-forget request to cache historical data on the server
+            fetch(`/api/request_history/${symbol}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log(`History request for ${symbol} sent. Status: ${data.status}`);
+                    } else {
+                        logError(`History request for ${symbol} failed: ${data.error}`);
+                    }
+                }).catch(err => {
+                    logError(`History request for ${symbol} failed: ${err.message}`);
+                });
         }
         updateBackendWatchlist();
     };
