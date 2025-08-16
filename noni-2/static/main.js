@@ -43,6 +43,41 @@ document.addEventListener('DOMContentLoaded', () => {
     let accumValue = 0;
     let accumHistory = [];
 
+    // --- MOCK DATA GENERATOR (for testing without live data) ---
+    let mockPrice = null;
+    let mockDataCounter = 0;
+    const generateMockData = () => {
+        if (mockPrice === null) {
+            mockPrice = parseFloat(strikeInput.value) || 100;
+        }
+
+        mockDataCounter = (mockDataCounter + 1) % 400;
+        let percentageChange = 0;
+
+        if (mockDataCounter < 100) { // Phase 1: Random +/- 0.02%
+            percentageChange = (Math.random() - 0.5) * 2 * 0.0002; // -0.0002 to +0.0002
+        } else if (mockDataCounter < 200) { // Phase 2: Increasing bias +0.01% to +0.05%
+            percentageChange = (0.0001 + Math.random() * 0.0004);
+        } else if (mockDataCounter < 300) { // Phase 3: Decreasing bias -0.01% to -0.05%
+            percentageChange = -(0.0001 + Math.random() * 0.0004);
+        } else { // Phase 4: Random +/- 0.02%
+            percentageChange = (Math.random() - 0.5) * 2 * 0.0002;
+        }
+
+        mockPrice *= (1 + percentageChange);
+
+        // Return a mock object that mimics the real API response structure
+        return Promise.resolve({
+            success: true,
+            data: {
+                underlying: { last: mockPrice },
+                callExpDateMap: {}, // Provide empty objects to prevent errors
+                putExpDateMap: {}
+            }
+        });
+    };
+    // --- END MOCK DATA ---
+
     const drawAccumChart = () => {
         const canvas = document.getElementById('accum-chart');
         if (!canvas) return;
@@ -336,8 +371,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!symbol || !strike || !expiry || !accountHash) return;
 
         try {
-            const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
-            const data = await response.json();
+            // --- MOCK DATA ACTIVATION ---
+            // To use real data, comment out the line below and uncomment the 'fetch' line
+            const responsePromise = generateMockData();
+            // const responsePromise = fetch(`/api/options/${symbol}/${strike}/${expiry}`).then(res => res.json());
+            // --- END MOCK DATA ACTIVATION ---
+
+            const data = await responsePromise;
+
             if (data.success) {
                 if (data.data.underlying && data.data.underlying.last) {
                     const currentPrice = data.data.underlying.last;
@@ -482,6 +523,8 @@ document.addEventListener('DOMContentLoaded', () => {
         priceHistory = [];
         accumValue = 0;
         accumHistory = [];
+        mockPrice = null; // Reset mock price for new instrument
+        mockDataCounter = 0;
         currentPriceEl.textContent = '-.--';
         drawAccumChart(); // Clear the canvas
 
