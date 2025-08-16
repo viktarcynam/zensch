@@ -70,6 +70,7 @@ class HistoryService:
 
             history_daily_response = self.schwab_client.price_history(
                 symbol=symbol,
+                periodType='year',
                 frequencyType='daily',
                 startDate=int(start_date.timestamp() * 1000), # Epoch milliseconds
                 endDate=int(end_date.timestamp() * 1000), # Epoch milliseconds
