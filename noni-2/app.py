@@ -235,8 +235,14 @@ def get_recent_fills():
     account_hash = request.args.get('account_hash')
     if not account_hash: return jsonify({"success": False, "error": "Account hash required."}), 400
     with SchwabClient() as client:
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        orders_response = client.get_option_orders(account_id=account_hash, status='FILLED', from_entered_time=f"{today_str}T00:00:00Z", to_entered_time=f"{today_str}T23:59:59Z")
+        # Fetch fills from the last 2 days up to the current time.
+        from_date = datetime.now() - timedelta(days=2)
+        from_date_str = from_date.strftime('%Y-%m-%d')
+        orders_response = client.get_option_orders(
+            account_id=account_hash,
+            status='FILLED',
+            from_entered_time=f"{from_date_str}T00:00:00Z"
+        )
         if orders_response.get('success') and orders_response.get('data'):
             filled_orders_data = []
             for order in orders_response.get('data', []):
@@ -271,6 +277,20 @@ def get_recent_fills():
                     continue
             return jsonify({"success": True, "fills": filled_orders_data})
     return jsonify({"success": False, "error": "Could not retrieve recent fills."}), 500
+
+
+@app.route('/api/working_orders', methods=['GET'])
+def get_working_orders():
+    """
+    Returns a list of all active orders from the in-memory cache,
+    which is maintained by the background poller.
+    """
+    with CACHE_LOCK:
+        # The ACTIVE_ORDERS dict values are the order details objects.
+        # The poller already includes both WORKING and PENDING_ACTIVATION orders.
+        orders = list(ACTIVE_ORDERS.values())
+    return jsonify({"success": True, "orders": orders})
+
 
 @app.route('/api/options/<symbol>/<strike>/<expiry>', methods=['GET'])
 def get_options(symbol, strike, expiry):
@@ -338,6 +358,13 @@ def handle_order():
         if existing_order_to_replace:
             # --- We are replacing an existing order ---
             app.logger.info(f"Found existing order {existing_order_to_replace['order_id']}. Replacing it.")
+
+            # Per user requirements, retain the original order's quantity and side for the replacement.
+            # The price is the only thing that should change from the user's new input.
+            original_quantity = existing_order_to_replace['quantity']
+            original_side = existing_order_to_replace['side']
+            app.logger.info(f"Retaining original quantity ({original_quantity}) and side ({original_side}) for replacement.")
+
             response = client.replace_option_order(
                 account_id=details['account_id'],
                 order_id=existing_order_to_replace['order_id'],
@@ -345,8 +372,8 @@ def handle_order():
                 option_type=details['option_type'],
                 expiration_date=details['expiration_date'],
                 strike_price=details['strike_price'],
-                quantity=details['quantity'],
-                side=details['side'],
+                quantity=original_quantity,  # Use original quantity
+                side=original_side,          # Use original side
                 order_type=details['order_type'],
                 price=details.get('price')
             )
