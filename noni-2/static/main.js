@@ -43,41 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let accumValue = 0;
     let accumHistory = [];
     let rsiHistory = [];
-
-    // --- MOCK DATA GENERATOR (for testing without live data) ---
-    let mockPrice = null;
-    let mockDataCounter = 0;
-    const generateMockData = () => {
-        if (mockPrice === null) {
-            mockPrice = parseFloat(strikeInput.value) || 100;
-        }
-
-        mockDataCounter = (mockDataCounter + 1) % 400;
-        let percentageChange = 0;
-
-        if (mockDataCounter < 100) { // Phase 1: Random +/- 0.02%
-            percentageChange = (Math.random() - 0.5) * 2 * 0.0002; // -0.0002 to +0.0002
-        } else if (mockDataCounter < 200) { // Phase 2: Increasing bias +0.01% to +0.05%
-            percentageChange = (0.0001 + Math.random() * 0.0004);
-        } else if (mockDataCounter < 300) { // Phase 3: Decreasing bias -0.01% to -0.05%
-            percentageChange = -(0.0001 + Math.random() * 0.0004);
-        } else { // Phase 4: Random +/- 0.02%
-            percentageChange = (Math.random() - 0.5) * 2 * 0.0002;
-        }
-
-        mockPrice *= (1 + percentageChange);
-
-        // Return a mock object that mimics the real API response structure
-        return Promise.resolve({
-            success: true,
-            data: {
-                underlying: { last: mockPrice },
-                callExpDateMap: {}, // Provide empty objects to prevent errors
-                putExpDateMap: {}
-            }
-        });
-    };
-    // --- END MOCK DATA ---
+    let rsiDailyHistory = [];
 
     const calculateRSI = (prices, period = 14) => {
         if (prices.length <= period) return [];
@@ -121,6 +87,45 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
+    const drawRsiDailyChart = () => {
+        const canvas = document.getElementById('rsi-daily-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (rsiDailyHistory.length < 2) return;
+
+        const mapY = (val) => canvas.height - (val / 100) * canvas.height;
+        const mapX = (index) => (index / (rsiDailyHistory.length - 1)) * canvas.width;
+
+        // Draw reference lines at 30 and 70
+        [30, 70].forEach(level => {
+            const y = mapY(level);
+            ctx.beginPath();
+            ctx.strokeStyle = '#8B4513'; // A more visible saddle brown color
+            ctx.setLineDash([2, 2]);
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Draw RSI line
+        ctx.beginPath();
+        ctx.strokeStyle = '#FFD700'; // Gold color for daily RSI
+        ctx.lineWidth = 1.5;
+        rsiDailyHistory.forEach((point, index) => {
+            const x = mapX(index);
+            const y = mapY(point);
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    };
+
     const drawRsiChart = () => {
         const canvas = document.getElementById('rsi-chart');
         if (!canvas) return;
@@ -139,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         [30, 70].forEach(level => {
             const y = mapY(level);
             ctx.beginPath();
-            ctx.strokeStyle = '#555';
+            ctx.strokeStyle = '#8B4513'; // A more visible saddle brown color
             ctx.setLineDash([2, 2]);
             ctx.moveTo(0, y);
             ctx.lineTo(canvas.width, y);
@@ -193,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const yZero = mapY(0);
         if (yZero >= 0 && yZero <= canvas.height) { // Only draw if visible
             ctx.beginPath();
-            ctx.strokeStyle = '#555'; // Grey color
+            ctx.strokeStyle = '#8B4513'; // A more visible saddle brown color
             ctx.setLineDash([2, 2]); // Dashed line
             ctx.moveTo(0, yZero);
             ctx.lineTo(canvas.width, yZero);
@@ -454,14 +459,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!symbol || !strike || !expiry || !accountHash) return;
 
         try {
-            // --- MOCK DATA ACTIVATION ---
-            // To use real data, comment out the line below and uncomment the 'fetch' line
-            const responsePromise = generateMockData();
-            // const responsePromise = fetch(`/api/options/${symbol}/${strike}/${expiry}`).then(res => res.json());
-            // --- END MOCK DATA ACTIVATION ---
-
-            const data = await responsePromise;
-
+            const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
+            const data = await response.json();
             if (data.success) {
                 if (data.data.underlying && data.data.underlying.last) {
                     const currentPrice = data.data.underlying.last;
@@ -622,14 +621,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const result = await response.json();
 
-                if (result.success && result.data.data.data_30m && result.data.data.data_30m.candles) {
-                    const prices = result.data.data.data_30m.candles.map(c => c.close);
-                    rsiHistory = calculateRSI(prices);
-                    drawRsiChart();
+                if (result.success) {
+                    // Process 30-minute data for the first RSI chart
+                    if (result.data.data.data_30m && result.data.data.data_30m.candles) {
+                        const prices30m = result.data.data.data_30m.candles.map(c => c.close);
+                        rsiHistory = calculateRSI(prices30m);
+                        drawRsiChart();
+                    } else {
+                        logError(`Could not process 30m history for ${symbol}.`);
+                        rsiHistory = [];
+                        drawRsiChart();
+                    }
+
+                    // Process daily data for the second RSI chart
+                    if (result.data.data.data_daily && result.data.data.data_daily.candles) {
+                        const pricesDaily = result.data.data.data_daily.candles.map(c => c.close);
+                        rsiDailyHistory = calculateRSI(pricesDaily);
+                        drawRsiDailyChart();
+                    } else {
+                        logError(`Could not process daily history for ${symbol}.`);
+                        rsiDailyHistory = [];
+                        drawRsiDailyChart();
+                    }
                 } else {
-                    logError(`Could not process 30m history for ${symbol}.`);
-                    rsiHistory = [];
-                    drawRsiChart();
+                     logError(`get_history API call failed for ${symbol}: ${result.error}`);
                 }
             } catch (error) {
                 logError(`Error in fetchHistoryAndDrawCharts for ${symbol}: ${error.message}`);
@@ -649,11 +664,11 @@ document.addEventListener('DOMContentLoaded', () => {
         accumValue = 0;
         accumHistory = [];
         rsiHistory = [];
-        mockPrice = null; // Reset mock price for new instrument
-        mockDataCounter = 0;
+        rsiDailyHistory = [];
         currentPriceEl.textContent = '-.--';
         drawAccumChart(); // Clear the canvas
         drawRsiChart(); // Clear the canvas
+        drawRsiDailyChart(); // Clear the canvas
 
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
