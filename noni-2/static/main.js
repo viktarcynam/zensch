@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const putPositionDisplay = document.getElementById('put-position-display');
     const cancelBtn = document.getElementById('cancel-btn');
     const fillsScroller = document.getElementById('fills-scroller');
+    const workingOrdersScroller = document.getElementById('working-orders-scroller');
     const priceTicker = document.getElementById('price-ticker');
     const errorLogContainer = document.getElementById('error-log-container');
     const errorLogHeader = document.getElementById('error-log-header');
@@ -110,6 +111,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             logError(`Error fetching recent fills: ${error.message}`);
+        }
+    };
+
+    const fetchWorkingOrders = async () => {
+        if (!accountHash) return;
+        try {
+            const response = await fetch(`/api/working_orders?account_hash=${accountHash}`);
+            const data = await response.json();
+            if (data.success && data.orders) {
+                workingOrdersScroller.innerHTML = '';
+                data.orders.forEach(order => {
+                    const leg = order.orderLegCollection[0];
+                    const instrument = leg.instrument;
+                    const orderString = `${leg.instruction.split('_')[0]} ${leg.quantity} ${instrument.underlyingSymbol} ${instrument.description.split(' ')[-2]} ${instrument.putCall[0]} @ ${order.price.toFixed(2)}`;
+                    const orderDiv = document.createElement('div');
+                    orderDiv.className = 'working-order-item';
+                    orderDiv.textContent = orderString;
+                    orderDiv.addEventListener('click', () => showWorkingOrderModal(order, orderDiv));
+                    workingOrdersScroller.appendChild(orderDiv);
+                });
+            }
+        } catch (error) {
+            logError(`Error fetching working orders: ${error.message}`);
         }
     };
 
@@ -579,6 +603,93 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     };
 
+    const showWorkingOrderModal = (order, orderDiv) => {
+        const existingModal = document.querySelector('.modal-overlay');
+        if (existingModal) existingModal.remove();
+
+        document.querySelectorAll('.working-order-item.active-fill').forEach(el => el.classList.remove('active-fill'));
+        if (orderDiv) orderDiv.classList.add('active-fill');
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const content = document.createElement('div');
+        content.className = 'modal-content';
+
+        const leg = order.orderLegCollection[0];
+        const instrument = leg.instrument;
+        const title = `WORKING ORDER: ${leg.instruction.split('_')[0]} ${leg.quantity} ${instrument.underlyingSymbol} ${instrument.description.split(' ')[-2]} ${instrument.putCall[0]}`;
+
+        content.innerHTML = `
+            <h3 class="modal-title">${title}</h3>
+            <div class="modal-price-input-wrapper">
+                <label for="modal-price-input">Price:</label>
+                <div class="price-adjust-wrapper">
+                     <button class="price-adjust-btn" data-target="modal-price-input" data-amount="-0.01">-</button>
+                     <input type="number" id="modal-price-input" class="order-input" step="0.01" value="${order.price.toFixed(2)}">
+                     <button class="price-adjust-btn" data-target="modal-price-input" data-amount="0.01">+</button>
+                </div>
+            </div>
+            <div class="modal-buttons modal-three-buttons">
+                <button id="modal-cancel-order-btn" class="control-btn">Cancel Order</button>
+                <button id="modal-exit-btn" class="control-btn">Exit</button>
+                <button id="modal-replace-btn" class="order-btn">Replace Order</button>
+            </div>
+        `;
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+
+        const closeModal = () => {
+            if (orderDiv) orderDiv.classList.remove('active-fill');
+            overlay.remove();
+        };
+
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+        document.getElementById('modal-exit-btn').addEventListener('click', closeModal);
+
+        document.getElementById('modal-cancel-order-btn').addEventListener('click', () => {
+            handleCancel({ order_id: order.orderId, account_id: accountHash });
+            closeModal();
+        });
+
+        document.getElementById('modal-replace-btn').addEventListener('click', () => {
+            const newPrice = parseFloat(document.getElementById('modal-price-input').value);
+            if (!newPrice || newPrice <= 0) {
+                setStatus("Invalid price in modal.", true);
+                return;
+            }
+            // For a replacement, we need to send the full original order details plus the new price.
+            // The backend will ensure quantity and side are preserved.
+            const orderDetails = {
+                account_id: accountHash,
+                order_id: order.orderId, // Important for replacement
+                symbol: instrument.underlyingSymbol,
+                option_type: instrument.putCall,
+                expiration_date: instrument.parsed_expiration, // Use pre-parsed value
+                strike_price: instrument.parsed_strike,       // Use pre-parsed value
+                quantity: leg.quantity,
+                side: leg.instruction,
+                order_type: order.orderType,
+                price: newPrice
+            };
+            placeOrder(orderDetails);
+            closeModal();
+        });
+
+        content.querySelectorAll('.price-adjust-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const button = e.currentTarget;
+                const targetInputId = button.dataset.target;
+                const amount = parseFloat(button.dataset.amount);
+                const targetInput = document.getElementById(targetInputId);
+                if (targetInput) {
+                    const currentValue = parseFloat(targetInput.value) || 0;
+                    const newValue = currentValue + amount;
+                    targetInput.value = Math.max(0, newValue).toFixed(2);
+                }
+            });
+        });
+    };
+
     const init = async () => {
         try {
             const response = await fetch('/api/accounts');
@@ -588,7 +699,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 enableControls(true);
                 setStatus('Idle');
                 fetchRecentFills();
+                fetchWorkingOrders();
                 setInterval(fetchRecentFills, 30000);
+                setInterval(fetchWorkingOrders, 5000); // Poll more frequently for working orders
                 setInterval(fetchPositions, 10000);
             } else {
                 setStatus(`Error: ${data.error}`, true);

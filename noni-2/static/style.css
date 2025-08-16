@@ -68,9 +68,27 @@ body {
     padding: 2px 0;
 }
 
+.side-scrollers {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
 .fills-scroller {
     width: 220px; /* Wider to prevent wrapping */
     font-size: 0.7em; /* Reduced font size by ~25% from 0.9em */
+    height: 200px;
+}
+
+.working-orders-scroller {
+    width: 220px;
+    font-size: 0.7em;
+    height: 80px;
+}
+
+.working-order-item:hover {
+    background-color: #4a4e51;
+    cursor: pointer;
 }
 
 .fill-item:hover {
