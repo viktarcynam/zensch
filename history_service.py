@@ -64,16 +64,12 @@ class HistoryService:
 
 
             # 2. Fetch daily data for the past 15 days.
-            # The API doesn't support a 30-day period directly, so we use a date range.
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=30)
-
+            # Fetch 1 year of daily data.
             history_daily_response = self.schwab_client.price_history(
                 symbol=symbol,
                 periodType='year',
+                period=1,
                 frequencyType='daily',
-                startDate=int(start_date.timestamp() * 1000), # Epoch milliseconds
-                endDate=int(end_date.timestamp() * 1000), # Epoch milliseconds
                 needExtendedHoursData=False
             )
             history_daily_json = history_daily_response.json() if history_daily_response.ok else {'error': history_daily_response.text}
