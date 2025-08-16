@@ -40,6 +40,66 @@ document.addEventListener('DOMContentLoaded', () => {
     let instrumentOrders = []; // The single source of truth for active orders for the current instrument.
     let strikeInputOriginalValue = ''; // Store strike value before clearing for datalist display
     let priceHistory = []; // Array to store price history for the current instrument
+    let accumValue = 0;
+    let accumHistory = [];
+
+    const drawAccumChart = () => {
+        const canvas = document.getElementById('accum-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        // Ensure canvas is sized correctly to avoid distortion
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (accumHistory.length < 2) return;
+
+        const visibleData = accumHistory.slice(-200); // Draw last 200 points
+
+        const minVal = Math.min(...visibleData);
+        const maxVal = Math.max(...visibleData);
+        const range = Math.max(maxVal - minVal, 0.1); // Avoid division by zero
+
+        const mapY = (val) => {
+            // y=0 in canvas is top, so we flip it
+            return canvas.height - ((val - minVal) / range) * canvas.height;
+        };
+
+        const mapX = (index) => {
+            return (index / (visibleData.length - 1)) * canvas.width;
+        };
+
+        // Draw the y=0 reference line
+        const yZero = mapY(0);
+        if (yZero >= 0 && yZero <= canvas.height) { // Only draw if visible
+            ctx.beginPath();
+            ctx.strokeStyle = '#555'; // Grey color
+            ctx.setLineDash([2, 2]); // Dashed line
+            ctx.moveTo(0, yZero);
+            ctx.lineTo(canvas.width, yZero);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset dash
+        }
+
+        // Draw the accum line
+        ctx.beginPath();
+        ctx.strokeStyle = '#68d2ff'; // Light blue color
+        ctx.lineWidth = 1.5;
+
+        visibleData.forEach((point, index) => {
+            const x = mapX(index);
+            const y = mapY(point);
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        ctx.stroke();
+    };
+
 
     // --- Helper Functions ---
     const logErrorToUI = (message) => {
@@ -288,6 +348,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (priceHistory.length > 9000) {
                         priceHistory.shift(); // Remove the oldest entry
                     }
+
+                    // --- ACCUM CALCULATION ---
+                    if (priceHistory.length >= 2) {
+                        const previousPrice = priceHistory[priceHistory.length - 2];
+                        const delta = currentPrice - previousPrice;
+                        accumValue += delta;
+                    }
+                    accumHistory.push(accumValue);
+                    if (accumHistory.length > 200) {
+                        accumHistory.shift();
+                    }
+                    drawAccumChart();
+                    // --- END ACCUM CALCULATION ---
                 }
                 const callMap = data.data.callExpDateMap, putMap = data.data.putExpDateMap;
                 const normalizedStrikeKey = parseFloat(strike).toFixed(1);
@@ -407,7 +480,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Clear history and reset display for the new instrument
         priceHistory = [];
+        accumValue = 0;
+        accumHistory = [];
         currentPriceEl.textContent = '-.--';
+        drawAccumChart(); // Clear the canvas
 
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
