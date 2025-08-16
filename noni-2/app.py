@@ -338,6 +338,13 @@ def handle_order():
         if existing_order_to_replace:
             # --- We are replacing an existing order ---
             app.logger.info(f"Found existing order {existing_order_to_replace['order_id']}. Replacing it.")
+
+            # Per user requirements, retain the original order's quantity and side for the replacement.
+            # The price is the only thing that should change from the user's new input.
+            original_quantity = existing_order_to_replace['quantity']
+            original_side = existing_order_to_replace['side']
+            app.logger.info(f"Retaining original quantity ({original_quantity}) and side ({original_side}) for replacement.")
+
             response = client.replace_option_order(
                 account_id=details['account_id'],
                 order_id=existing_order_to_replace['order_id'],
@@ -345,8 +352,8 @@ def handle_order():
                 option_type=details['option_type'],
                 expiration_date=details['expiration_date'],
                 strike_price=details['strike_price'],
-                quantity=details['quantity'],
-                side=details['side'],
+                quantity=original_quantity,  # Use original quantity
+                side=original_side,          # Use original side
                 order_type=details['order_type'],
                 price=details.get('price')
             )

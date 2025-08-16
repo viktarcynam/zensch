@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const csBtn = document.getElementById('cs-btn');
     const pbBtn = document.getElementById('pb-btn');
     const psBtn = document.getElementById('ps-btn');
+    const quantityInput = document.getElementById('quantity-input');
     const statusDisplay = document.getElementById('status-display');
     const callPositionDisplay = document.getElementById('call-position-display');
     const putPositionDisplay = document.getElementById('put-position-display');
@@ -539,13 +540,20 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 side = currentQuantity > 0 ? 'SELL_TO_CLOSE' : 'SELL_TO_OPEN';
             }
+            let orderQuantity;
+            if (side.endsWith('_CLOSE')) {
+                orderQuantity = Math.abs(currentQuantity);
+            } else {
+                orderQuantity = parseInt(quantityInput.value, 10) || 1;
+            }
+
             const orderDetails = {
                 account_id: accountHash,
                 symbol: symbol,
                 option_type: optionType,
                 expiration_date: expiry,
                 strike_price: parseFloat(strike),
-                quantity: 1,
+                quantity: orderQuantity,
                 side: side,
                 order_type: 'LIMIT',
                 price: parseFloat(priceInput.value)

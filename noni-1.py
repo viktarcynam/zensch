@@ -611,10 +611,8 @@ def monitor_and_close_workflow(client, account_hash, order_to_monitor):
                     print(f"Exit Price: {format_price(exit_price)}")
                     print("--------------------")
 
-def place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, positions_response, target_option_data):
+def place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, quantity, positions_response, target_option_data):
     """Handles the entire workflow for placing and monitoring an order."""
-    quantity = 1
-
     # Determine side
     current_quantity = 0
     if positions_response.get('success') and positions_response.get('data'):
@@ -637,10 +635,20 @@ def place_order_workflow(client, account_hash, symbol, option_type_in, strike_pr
                 break
 
     side = ""
+    # If it's a closing action, the quantity should be the absolute size of the position.
+    # Otherwise, it's an opening action, and we use the user-provided quantity.
     if action == 'B':
-        side = "BUY_TO_CLOSE" if current_quantity < 0 else "BUY_TO_OPEN"
+        if current_quantity < 0:
+            side = "BUY_TO_CLOSE"
+            quantity = abs(current_quantity)
+        else:
+            side = "BUY_TO_OPEN"
     else:  # 'S'
-        side = "SELL_TO_CLOSE" if current_quantity > 0 else "SELL_TO_OPEN"
+        if current_quantity > 0:
+            side = "SELL_TO_CLOSE"
+            quantity = abs(current_quantity)
+        else:
+            side = "SELL_TO_OPEN"
 
     # Place opening order
     order_response = client.place_option_order(
@@ -810,11 +818,21 @@ def noni_1_main():
                 # Prompt for action
                 action_input = input("ACTION- ").upper().strip()
                 parts = action_input.split()
-                if len(parts) != 3:
-                    print("Invalid action format. Use: B/S C/P PRICE (e.g., B C 1.25)")
+                if len(parts) < 3 or len(parts) > 4:
+                    print("Invalid action format. Use: B/S C/P PRICE [QTY] (e.g., B C 1.25 5)")
                     continue
 
-                action, option_type_in, price_str = parts
+                action, option_type_in, price_str = parts[0], parts[1], parts[2]
+                quantity = 1
+                if len(parts) == 4:
+                    try:
+                        quantity = int(parts[3])
+                        if quantity <= 0:
+                            print("Quantity must be a positive integer.")
+                            continue
+                    except ValueError:
+                        print("Invalid quantity. Must be an integer.")
+                        continue
 
                 if action not in ['B', 'S']:
                     print("Invalid action. Must be 'B' (buy) or 'S' (sell).")
@@ -852,8 +870,6 @@ def noni_1_main():
                     print("Please restart the flow for this symbol.")
                     continue
 
-                quantity = 1
-
                 # Check for existing orders
                 existing_order = check_for_existing_order(client, account_hash, symbol, option_type_in, strike_price, expiry_date)
 
@@ -865,14 +881,16 @@ def noni_1_main():
                         existing_order_id = existing_order.get('orderId')
                         print(f"Replacing order {existing_order_id}...")
 
-                        # Per API rules, the instruction ('side') cannot be changed during a replacement.
-                        # We must use the original instruction from the order being replaced.
-                        # The 'side' is determined by the 'instruction' in the first leg of the order.
+                        # Per user requirements, the instruction ('side') and quantity cannot be changed during a replacement.
+                        # We must use the original values from the order being replaced.
                         try:
-                            side = existing_order['orderLegCollection'][0]['instruction']
+                            leg = existing_order['orderLegCollection'][0]
+                            side = leg['instruction']
+                            original_quantity = leg['quantity']
                             print(f"Using original instruction from existing order: '{side}'")
+                            print(f"Retaining original quantity for replacement: {original_quantity}")
                         except (IndexError, KeyError) as e:
-                            print(f"Error: Could not determine original instruction from existing order: {e}")
+                            print(f"Error: Could not determine original instruction or quantity from existing order: {e}")
                             print("Aborting replacement.")
                             continue # Go back to the main menu
 
@@ -883,7 +901,7 @@ def noni_1_main():
                             option_type="CALL" if option_type_in == 'C' else "PUT",
                             expiration_date=expiry_date,
                             strike_price=strike_price,
-                            quantity=1,
+                            quantity=original_quantity, # Use the original, unchanged quantity
                             side=side, # Use the original, unchanged instruction
                             order_type="LIMIT",
                             price=price
@@ -899,7 +917,7 @@ def noni_1_main():
                                 order_to_monitor = {
                                     "orderId": new_order_id,
                                     "instruction": side,
-                                    "quantity": quantity,
+                                    "quantity": original_quantity, # Use original quantity
                                     "symbol": symbol,
                                     "putCall": "CALL" if option_type_in == 'C' else "PUT",
                                     "strike": strike_price,
@@ -918,12 +936,12 @@ def noni_1_main():
                     else:
                         continue_anyway = input("Continue and place new order anyway? (c to continue, any other key to exit): ").lower()
                         if continue_anyway == 'c':
-                            place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, positions_response, target_option_data)
+                            place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, quantity, positions_response, target_option_data)
                         else:
                             print("Aborting order.")
                             continue
                 else:
-                    place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, positions_response, target_option_data)
+                    place_order_workflow(client, account_hash, symbol, option_type_in, strike_price, expiry_date, action, price, quantity, positions_response, target_option_data)
             except KeyboardInterrupt:
                 print("\nClient interrupted by user.")
                 break
