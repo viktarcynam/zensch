@@ -44,7 +44,9 @@ body {
 }
 
 .fill-item.active-fill {
-    background-color: #5a5e61; /* A slightly lighter, more prominent background */
+    background-color: #ffc107; /* Bright yellow background */
+    color: #2b2b2b;           /* Dark text for high contrast */
+    font-weight: bold;
     border-left: 3px solid #ffc107;
     padding-left: 7px; /* Adjust padding to account for border */
 }
