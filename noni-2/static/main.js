@@ -653,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modal-exit-btn').addEventListener('click', closeModal);
 
         document.getElementById('modal-cancel-order-btn').addEventListener('click', () => {
-            handleCancel({ order_id: order.orderId, account_id: accountHash });
+            handleCancel({ order_id: order.order_id, account_id: accountHash });
             closeModal();
         });
 
