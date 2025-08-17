@@ -688,18 +688,35 @@ if __name__ == "__main__":
 
     rules_file = args.rules_file or f"{args.symbol.lower()}-rules.yml"
 
-    # Collect CLI overrides into a dictionary, excluding None values
-    cli_overrides = {k: v for k, v in vars(args).items() if v is not None and k not in ['symbol', 'rules_file', 'dry_run', 'external_run', 'strike', 'expiry']}
+    # Map argparse dest names to rule keys and collect overrides
+    arg_to_rule_map = {
+        'prefer_cp': 'prefercp',
+        'prefer_bs': 'preferBS',
+        'spread': 'spread', 'waitbidask': 'waitbidask', 'openingmaxtime': 'openingmaxtime',
+        'maxflowretry': 'maxflowretry', 'openretrytime': 'openretrytime',
+        'openpricefish': 'openpricefish', 'openpricemethod': 'openpricemethod',
+        'closeretrytime': 'closeretrytime', 'closepricefish': 'closepricefish',
+        'closepricemethod': 'closepricemethod', 'closingmaxtime': 'closingmaxtime',
+        'emergencyclosetime': 'emergencyclosetime'
+    }
+    cli_overrides = {}
+    for arg_key, rule_key in arg_to_rule_map.items():
+        value = getattr(args, arg_key)
+        if value is not None:
+            cli_overrides[rule_key] = value
 
     rules = load_and_validate_rules(rules_file, cli_overrides)
 
-    # Set run mode
+    # Determine run mode with correct precedence: CLI flag > YAML setting
     if args.dry_run:
         rules['run_mode'] = 'dry_run'
-        print("\n*** DRY RUN MODE ENABLED - Simulating trades with random outcomes. ***\n")
+        print("\n*** DRY RUN MODE ENABLED (from CLI) - Simulating trades with random outcomes. ***\n")
     elif args.external_run:
         rules['run_mode'] = 'external_run'
         print("\n*** EXTERNAL RUN MODE ENABLED - Bot will suggest trades for manual execution. ***\n")
+    elif rules.get('dryrun', False): # Check for dryrun from the file
+        rules['run_mode'] = 'dry_run'
+        print("\n*** DRY RUN MODE ENABLED (from rules file) - Simulating trades with random outcomes. ***\n")
     else:
         rules['run_mode'] = 'live'
 
