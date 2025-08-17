@@ -229,14 +229,11 @@ const drawRsiDailyChart = (mousePosition) => {
             const textWidth = ctx.measureText(text).width;
             const padding = 5;
             let tooltipX = xPos + padding * 2;
-            let tooltipY = mousePosition.y - 20;
+            let tooltipY = 15; // Fixed Y position at the top of the canvas
 
             // Adjust position to keep tooltip within canvas bounds
             if (tooltipX + textWidth + padding > canvas.width) {
                 tooltipX = xPos - textWidth - (padding * 2);
-            }
-            if (tooltipY < 0) {
-                tooltipY = mousePosition.y + 10;
             }
 
             ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
@@ -321,14 +318,11 @@ const drawRsiChart = (mousePosition) => {
             const textWidth = ctx.measureText(text).width;
             const padding = 5;
             let tooltipX = xPos + padding * 2;
-            let tooltipY = mousePosition.y - 20;
+            let tooltipY = 15; // Fixed Y position at the top of the canvas
 
             // Adjust position to keep tooltip within canvas bounds
             if (tooltipX + textWidth + padding > canvas.width) {
                 tooltipX = xPos - textWidth - (padding * 2);
-            }
-            if (tooltipY < 0) {
-                tooltipY = mousePosition.y + 10;
             }
 
             ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
