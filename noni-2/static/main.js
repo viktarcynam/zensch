@@ -206,18 +206,18 @@ const drawRsiDailyChart = (mousePosition = null) => {
             const xPos = mapX(dataIndex);
 
             // Draw vertical guideline
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.setLineDash([3, 3]);
-            ctx.moveTo(xPos, 0);
-            ctx.lineTo(xPos, canvas.height);
-            ctx.stroke();
-            ctx.setLineDash([]);
+            // ctx.beginPath();
+            // ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            // ctx.setLineDash([3, 3]);
+            // ctx.moveTo(xPos, 0);
+            // ctx.lineTo(xPos, canvas.height);
+            // ctx.stroke();
+            // ctx.setLineDash([]);
 
             // Prepare tooltip text
-            const date = new Date(dataPoint.datetime);
-            const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
-            const text = `${dateString} - RSI: ${dataPoint.value.toFixed(2)}`;
+            // const date = new Date(dataPoint.datetime);
+            // const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
+            const text = `RSI: 50.00 | 12/25`;
 
             // Draw tooltip
             ctx.font = '11px Arial';
@@ -295,18 +295,18 @@ const drawRsiChart = (mousePosition = null) => {
             const xPos = mapX(dataIndex);
 
             // Draw vertical guideline
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.setLineDash([3, 3]);
-            ctx.moveTo(xPos, 0);
-            ctx.lineTo(xPos, canvas.height);
-            ctx.stroke();
-            ctx.setLineDash([]);
+            // ctx.beginPath();
+            // ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            // ctx.setLineDash([3, 3]);
+            // ctx.moveTo(xPos, 0);
+            // ctx.lineTo(xPos, canvas.height);
+            // ctx.stroke();
+            // ctx.setLineDash([]);
 
             // Prepare tooltip text
-            const date = new Date(dataPoint.datetime);
-            const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-            const text = `${dateString} - RSI: ${dataPoint.value.toFixed(2)}`;
+            // const date = new Date(dataPoint.datetime);
+            // const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const text = `RSI: 50.00 | 12/25, 12:00`;
 
             // Draw tooltip
             ctx.font = '11px Arial';
