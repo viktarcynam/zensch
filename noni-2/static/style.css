@@ -8,43 +8,91 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    flex-direction: column; /* Change to column for top-level layout */
-}
-
-@keyframes ticker-scroll {
-    0% {
-        transform: translateX(0);
-    }
-    100% {
-        transform: translateX(-100%);
-    }
+    flex-direction: column;
 }
 
 .app-wrapper {
     width: 100%;
+    max-width: 950px;
 }
 
-#price-ticker-container {
+#percentage-ticker-container {
     width: 100%;
+    background-color: #2b2b2b;
+    border: 1px solid #444;
+    border-radius: 4px;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    white-space: nowrap;
+    margin-bottom: 10px;
+    height: 22px;
+    scrollbar-width: none; /* For Firefox */
+}
+
+#percentage-ticker-container::-webkit-scrollbar {
+    display: none; /* For Chrome, Safari, and Opera */
+}
+
+#percentage-ticker {
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.pct-item {
+    display: inline-block;
+    padding: 0 5px;
+    font-size: 0.7em;
+    font-weight: bold;
+}
+
+.pct-green {
+    color: #4CAF50;
+}
+
+.pct-red {
+    color: #F44336;
+}
+
+#top-data-container {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    width: 100%;
+    justify-content: space-between;
+}
+
+.data-box {
     background-color: #313335;
     border: 1px solid #555;
-    overflow: hidden;
-    padding: 5px 0;
-    margin-bottom: 10px;
-    white-space: nowrap;
+    border-radius: 8px;
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-#price-ticker {
-    display: inline-block;
-    padding-left: 100%;
-    animation: ticker-scroll 60s linear infinite;
+#price-display-box {
+    font-size: 2em;
+    font-weight: bold;
+    color: #68d2ff;
 }
 
-#price-ticker .price-item {
-    display: inline-block;
-    padding: 0 15px;
-    font-size: 0.9em;
-    color: #a9b7c6;
+#chart-box-1, #chart-box-2, #chart-box-3 {
+    padding: 0;
+}
+
+#accum-chart, #rsi-chart, #rsi-daily-chart {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.data-box.placeholder {
+    background-color: #2b2b2b;
+    border-style: dashed;
 }
 
 .main-container {
@@ -62,7 +110,7 @@ body {
     padding: 10px;
     overflow-y: auto;
     font-size: 0.9em;
-    flex-shrink: 0; /* Prevent scrollers from shrinking */
+    flex-shrink: 0;
 }
 .scroller-box div {
     padding: 2px 0;
@@ -75,8 +123,8 @@ body {
 }
 
 .fills-scroller {
-    width: 220px; /* Wider to prevent wrapping */
-    font-size: 0.7em; /* Reduced font size by ~25% from 0.9em */
+    width: 220px;
+    font-size: 0.7em;
     height: 200px;
 }
 
@@ -86,22 +134,17 @@ body {
     height: 80px;
 }
 
-.working-order-item:hover {
-    background-color: #4a4e51;
-    cursor: pointer;
-}
-
-.fill-item:hover {
+.working-order-item:hover, .fill-item:hover {
     background-color: #4a4e51;
     cursor: pointer;
 }
 
 .fill-item.active-fill {
-    background-color: #ffc107; /* Bright yellow background */
-    color: #2b2b2b;           /* Dark text for high contrast */
+    background-color: #ffc107;
+    color: #2b2b2b;
     font-weight: bold;
     border-left: 3px solid #ffc107;
-    padding-left: 7px; /* Adjust padding to account for border */
+    padding-left: 7px;
 }
 
 .container {
@@ -149,12 +192,12 @@ input:focus {
 .position-display {
     flex-grow: 1;
     text-align: left;
-    padding: 4px 8px; /* Add some padding */
+    padding: 4px 8px;
     background-color: #2b2b2b;
     min-height: 18px;
     border-radius: 4px;
-    font-size: 0.75rem; /* Reduce font size significantly */
-    line-height: 1.4; /* Adjust line height for readability */
+    font-size: 0.75rem;
+    line-height: 1.4;
 }
 .strike-input {
     width: 100px;
@@ -187,7 +230,6 @@ input:focus {
     padding: 4px;
     font-size: 0.9rem;
 }
-
 
 .control-btn {
     background-color: #555;
@@ -222,7 +264,7 @@ input:focus {
 }
 
 .instrument-position.has-pos {
-    color: #ffc107; /* A gold/yellow color */
+    color: #ffc107;
     font-weight: bold;
 }
 .quote-item[data-label]::before {
@@ -274,8 +316,8 @@ input:focus {
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    padding: 6px 0; /* Adjusted padding */
-    width: 124px; /* Width of wrapper */
+    padding: 6px 0;
+    width: 124px;
     max-width: 124px;
     font-size: 0.9em;
 }
@@ -284,7 +326,7 @@ input:focus {
 #cs-btn:hover, #ps-btn:hover { background-color: #c9302c; }
 
 .order-btn.closing-action-btn {
-    box-shadow: 0 0 10px 3px #ffc107; /* A gold/yellow glow */
+    box-shadow: 0 0 10px 3px #ffc107;
     border: 1px solid #ffc107;
 }
 
@@ -294,9 +336,9 @@ input:focus {
     padding: 8px;
     border-radius: 4px;
     text-align: left;
-    white-space: normal; /* Allow text to wrap */
-    word-break: break-all; /* Break long words/errors */
-    min-height: 18px; /* Maintain a minimum height */
+    white-space: normal;
+    word-break: break-all;
+    min-height: 18px;
 }
 .in-progress-position {
     width: 100px;
@@ -308,7 +350,7 @@ input:focus {
 }
 .cancel-main-btn {
     background-color: #888;
-    width: 120px; /* Make cancel button wider */
+    width: 120px;
 }
 .cancel-main-btn:hover {
     background-color: #999;
@@ -322,8 +364,8 @@ input:focus {
 #instrument-position-group {
     display: flex;
     justify-content: center;
-    gap: 15px; /* Add some space between C: and P: */
-    flex-grow: 1; /* Allow the group to take up space */
+    gap: 15px;
+    flex-grow: 1;
     font-size: 1.1em;
 }
 
@@ -408,7 +450,7 @@ input:focus {
 
 .modal-price-input-wrapper .order-input {
     width: 80px;
-    border-radius: 4px; /* Give it normal radius */
+    border-radius: 4px;
 }
 
 .modal-buttons {
@@ -460,7 +502,7 @@ input:focus {
 }
 
 .error-log-container:not(.collapsed) .error-log-content {
-    max-height: 150px; /* Height when expanded */
+    max-height: 150px;
     padding: 8px;
     border-top: 1px solid #683030;
 }
@@ -469,6 +511,6 @@ input:focus {
     padding-bottom: 4px;
     border-bottom: 1px solid #555;
     margin-bottom: 4px;
-    white-space: pre-wrap; /* Allow wrapping */
+    white-space: pre-wrap;
     word-break: break-all;
 }

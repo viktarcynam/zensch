@@ -27,11 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelBtn = document.getElementById('cancel-btn');
     const fillsScroller = document.getElementById('fills-scroller');
     const workingOrdersScroller = document.getElementById('working-orders-scroller');
-    const priceTicker = document.getElementById('price-ticker');
+    const currentPriceEl = document.getElementById('current-price');
     const errorLogContainer = document.getElementById('error-log-container');
     const errorLogHeader = document.getElementById('error-log-header');
     const errorLogContent = document.getElementById('error-log-content');
     const errorLogToggleIcon = document.getElementById('error-log-toggle-icon');
+    const percentageTicker = document.getElementById('percentage-ticker');
 
     // --- State Management ---
     let accountHash = null;
@@ -39,6 +40,251 @@ document.addEventListener('DOMContentLoaded', () => {
     let instrumentStatusInterval = null;
     let instrumentOrders = []; // The single source of truth for active orders for the current instrument.
     let strikeInputOriginalValue = ''; // Store strike value before clearing for datalist display
+    let priceHistory = []; // Array to store price history for the current instrument
+    let accumValue = 0;
+    let accumHistory = [];
+    let rsiHistory = [];
+    let rsiDailyHistory = [];
+
+    // --- MOCK DATA GENERATOR (for testing without live data) ---
+    let mockPrice = null;
+    let mockDataCounter = 0;
+    const generateMockData = () => {
+        if (mockPrice === null) {
+            mockPrice = parseFloat(strikeInput.value) || 100;
+        }
+
+        mockDataCounter = (mockDataCounter + 1) % 400;
+        let percentageChange = 0;
+
+        if (mockDataCounter < 100) { // Phase 1: Random +/- 0.02%
+            percentageChange = (Math.random() - 0.5) * 2 * 0.0002; // -0.0002 to +0.0002
+        } else if (mockDataCounter < 200) { // Phase 2: Increasing bias +0.01% to +0.05%
+            percentageChange = (0.0001 + Math.random() * 0.0004);
+        } else if (mockDataCounter < 300) { // Phase 3: Decreasing bias -0.01% to -0.05%
+            percentageChange = -(0.0001 + Math.random() * 0.0004);
+        } else { // Phase 4: Random +/- 0.02%
+            percentageChange = (Math.random() - 0.5) * 2 * 0.0002;
+        }
+
+        mockPrice *= (1 + percentageChange);
+
+        // Return a mock object that mimics the real API response structure
+        return Promise.resolve({
+            success: true,
+            data: {
+                underlying: { last: mockPrice },
+                callExpDateMap: {}, // Provide empty objects to prevent errors
+                putExpDateMap: {}
+            }
+        });
+    };
+    // --- END MOCK DATA ---
+
+    const addPercentageToTicker = (percentageChange) => {
+        if (isNaN(percentageChange)) return;
+
+        const item = document.createElement('span');
+        item.className = 'pct-item';
+
+        const value = Math.abs(percentageChange);
+        item.textContent = `${value.toFixed(1)}%`;
+
+        if (percentageChange > 0) {
+            item.classList.add('pct-green');
+        } else if (percentageChange < 0) {
+            item.classList.add('pct-red');
+        }
+
+        percentageTicker.appendChild(item);
+
+        // Keep the DOM from getting too large
+        while (percentageTicker.children.length > 500) {
+            percentageTicker.removeChild(percentageTicker.firstChild);
+        }
+
+        // Scroll to the end
+        percentageTicker.parentElement.scrollLeft = percentageTicker.parentElement.scrollWidth;
+    };
+
+    const calculateRSI = (prices, period = 14) => {
+        if (prices.length <= period) return [];
+
+        let gains = [];
+        let losses = [];
+        let rsiValues = [];
+
+        // Calculate initial changes
+        for (let i = 1; i <= period; i++) {
+            const change = prices[i] - prices[i - 1];
+            if (change > 0) {
+                gains.push(change);
+                losses.push(0);
+            } else {
+                gains.push(0);
+                losses.push(Math.abs(change));
+            }
+        }
+
+        let avgGain = gains.reduce((a, b) => a + b, 0) / period;
+        let avgLoss = losses.reduce((a, b) => a + b, 0) / period;
+
+        let rs = avgLoss === 0 ? Infinity : avgGain / avgLoss;
+        rsiValues.push(100 - (100 / (1 + rs)));
+
+        // Calculate subsequent RSI values
+        for (let i = period + 1; i < prices.length; i++) {
+            const change = prices[i] - prices[i - 1];
+            let gain = change > 0 ? change : 0;
+            let loss = change < 0 ? Math.abs(change) : 0;
+
+            avgGain = (avgGain * (period - 1) + gain) / period;
+            avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+            rs = avgLoss === 0 ? Infinity : avgGain / avgLoss;
+            rsiValues.push(100 - (100 / (1 + rs)));
+        }
+
+        return rsiValues;
+    };
+
+
+    const drawRsiDailyChart = () => {
+        const canvas = document.getElementById('rsi-daily-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (rsiDailyHistory.length < 2) return;
+
+        const mapY = (val) => canvas.height - (val / 100) * canvas.height;
+        const mapX = (index) => (index / (rsiDailyHistory.length - 1)) * canvas.width;
+
+        // Draw reference lines at 30 and 70
+        [30, 70].forEach(level => {
+            const y = mapY(level);
+            ctx.beginPath();
+            ctx.strokeStyle = '#8B4513'; // A more visible saddle brown color
+            ctx.setLineDash([2, 2]);
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Draw RSI line
+        ctx.beginPath();
+        ctx.strokeStyle = '#FFD700'; // Gold color for daily RSI
+        ctx.lineWidth = 1.5;
+        rsiDailyHistory.forEach((point, index) => {
+            const x = mapX(index);
+            const y = mapY(point);
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    };
+
+    const drawRsiChart = () => {
+        const canvas = document.getElementById('rsi-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (rsiHistory.length < 2) return;
+
+        const mapY = (val) => canvas.height - (val / 100) * canvas.height;
+        const mapX = (index) => (index / (rsiHistory.length - 1)) * canvas.width;
+
+        // Draw reference lines at 30 and 70
+        [30, 70].forEach(level => {
+            const y = mapY(level);
+            ctx.beginPath();
+            ctx.strokeStyle = '#8B4513'; // A more visible saddle brown color
+            ctx.setLineDash([2, 2]);
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Draw RSI line
+        ctx.beginPath();
+        ctx.strokeStyle = '#d8a0ff'; // Purple color
+        ctx.lineWidth = 1.5;
+        rsiHistory.forEach((point, index) => {
+            const x = mapX(index);
+            const y = mapY(point);
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    };
+
+
+    const drawAccumChart = () => {
+        const canvas = document.getElementById('accum-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        // Ensure canvas is sized correctly to avoid distortion
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (accumHistory.length < 2) return;
+
+        const visibleData = accumHistory.slice(-200); // Draw last 200 points
+
+        const minVal = Math.min(...visibleData);
+        const maxVal = Math.max(...visibleData);
+        const range = Math.max(maxVal - minVal, 0.1); // Avoid division by zero
+
+        const mapY = (val) => {
+            // y=0 in canvas is top, so we flip it
+            return canvas.height - ((val - minVal) / range) * canvas.height;
+        };
+
+        const mapX = (index) => {
+            return (index / (visibleData.length - 1)) * canvas.width;
+        };
+
+        // Draw the y=0 reference line
+        const yZero = mapY(0);
+        if (yZero >= 0 && yZero <= canvas.height) { // Only draw if visible
+            ctx.beginPath();
+            ctx.strokeStyle = '#8B4513'; // A more visible saddle brown color
+            ctx.setLineDash([2, 2]); // Dashed line
+            ctx.moveTo(0, yZero);
+            ctx.lineTo(canvas.width, yZero);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset dash
+        }
+
+        // Draw the accum line
+        ctx.beginPath();
+        ctx.strokeStyle = '#68d2ff'; // Light blue color
+        ctx.lineWidth = 1.5;
+
+        visibleData.forEach((point, index) => {
+            const x = mapX(index);
+            const y = mapY(point);
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        ctx.stroke();
+    };
+
 
     // --- Helper Functions ---
     const logErrorToUI = (message) => {
@@ -275,19 +521,41 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!symbol || !strike || !expiry || !accountHash) return;
 
         try {
-            const response = await fetch(`/api/options/${symbol}/${strike}/${expiry}`);
-            const data = await response.json();
-            if (data.success) {
-                if (data.data.underlying) {
-                    const priceSpan = document.createElement('span');
-                    priceSpan.className = 'price-item';
-                    priceSpan.textContent = data.data.underlying.last.toFixed(2);
-                    priceTicker.appendChild(priceSpan);
+            // --- MOCK DATA ACTIVATION ---
+            const responsePromise = generateMockData();
+            // const responsePromise = fetch(`/api/options/${symbol}/${strike}/${expiry}`).then(res => res.json());
+            // --- END MOCK DATA ACTIVATION ---
 
-                    // To keep the ticker from getting infinitely long
-                    while (priceTicker.children.length > 100) {
-                        priceTicker.removeChild(priceTicker.firstChild);
+            const data = await responsePromise;
+
+            if (data.success) {
+                if (data.data.underlying && data.data.underlying.last) {
+                    const currentPrice = data.data.underlying.last;
+                    currentPriceEl.textContent = currentPrice.toFixed(2);
+
+                    // Add to price history and manage its size
+                    priceHistory.push(currentPrice);
+                    if (priceHistory.length > 9000) {
+                        priceHistory.shift(); // Remove the oldest entry
                     }
+
+                    // --- ACCUM and Percentage Ticker CALCULATION ---
+                    if (priceHistory.length >= 2) {
+                        const previousPrice = priceHistory[priceHistory.length - 2];
+                        const delta = currentPrice - previousPrice;
+                        accumValue += delta;
+
+                        if (previousPrice !== 0) {
+                            const percentageChange = (delta / previousPrice) * 100;
+                            addPercentageToTicker(percentageChange);
+                        }
+                    }
+                    accumHistory.push(accumValue);
+                    if (accumHistory.length > 200) {
+                        accumHistory.shift();
+                    }
+                    drawAccumChart();
+                    // --- END ACCUM CALCULATION ---
                 }
                 const callMap = data.data.callExpDateMap, putMap = data.data.putExpDateMap;
                 const normalizedStrikeKey = parseFloat(strike).toFixed(1);
@@ -401,10 +669,82 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus(statusHTML);
     };
 
+    const fetchHistoryAndDrawCharts = async (symbol) => {
+        let attempts = 0;
+        const maxAttempts = 5;
+        const interval = 2000; // 2 seconds
+
+        const attemptFetch = async () => {
+            if (attempts >= maxAttempts) {
+                logError(`Failed to fetch history for ${symbol} after ${maxAttempts} attempts.`);
+                return;
+            }
+            attempts++;
+
+            try {
+                const response = await fetch(`/api/get_history/${symbol}`);
+                if (response.status === 404) {
+                    // Data not ready, try again
+                    setTimeout(attemptFetch, interval);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+
+                if (result.success) {
+                    // Process 30-minute data for the first RSI chart
+                    if (result.data.data.data_30m && result.data.data.data_30m.candles) {
+                        const prices30m = result.data.data.data_30m.candles.map(c => c.close);
+                        rsiHistory = calculateRSI(prices30m);
+                        drawRsiChart();
+                    } else {
+                        logError(`Could not process 30m history for ${symbol}.`);
+                        rsiHistory = [];
+                        drawRsiChart();
+                    }
+
+                    // Process daily data for the second RSI chart
+                    if (result.data.data.data_daily && result.data.data.data_daily.candles) {
+                        const pricesDaily = result.data.data.data_daily.candles.map(c => c.close);
+                        rsiDailyHistory = calculateRSI(pricesDaily);
+                        drawRsiDailyChart();
+                    } else {
+                        logError(`Could not process daily history for ${symbol}.`);
+                        rsiDailyHistory = [];
+                        drawRsiDailyChart();
+                    }
+                } else {
+                     logError(`get_history API call failed for ${symbol}: ${result.error}`);
+                }
+            } catch (error) {
+                logError(`Error in fetchHistoryAndDrawCharts for ${symbol}: ${error.message}`);
+                setTimeout(attemptFetch, interval); // Retry on network error
+            }
+        };
+
+        await attemptFetch();
+    };
+
     const handleInputChange = () => {
         if (quotePollInterval) clearInterval(quotePollInterval);
         if (instrumentStatusInterval) clearInterval(instrumentStatusInterval);
-        priceTicker.innerHTML = ''; // Clear the ticker
+
+        // Clear history and reset display for the new instrument
+        priceHistory = [];
+        accumValue = 0;
+        accumHistory = [];
+        rsiHistory = [];
+        rsiDailyHistory = [];
+        mockPrice = null; // Reset mock price for new instrument
+        mockDataCounter = 0;
+        currentPriceEl.textContent = '-.--';
+        if(percentageTicker) percentageTicker.innerHTML = '';
+        drawAccumChart(); // Clear the canvas
+        drawRsiChart(); // Clear the canvas
+        drawRsiDailyChart(); // Clear the canvas
+
         const symbol = symbolInput.value.trim().toUpperCase();
         const strike = strikeInput.value;
         const expiry = expiryInput.value;
@@ -413,6 +753,25 @@ document.addEventListener('DOMContentLoaded', () => {
             quotePollInterval = setInterval(fetchQuoteAndInstrumentPosition, 2000);
             pollInstrumentOrders();
             instrumentStatusInterval = setInterval(pollInstrumentOrders, 2000);
+
+            // Fire-and-forget request to cache historical data on the server
+            fetch(`/api/request_history/${symbol}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log(`History request for ${symbol} sent. Status: ${data.status}`);
+                        // If data is already cached, fetch it immediately. Otherwise, start polling.
+                        if (data.status === 'CACHED') {
+                            fetchHistoryAndDrawCharts(symbol);
+                        } else {
+                             setTimeout(() => fetchHistoryAndDrawCharts(symbol), 2000); // Wait a bit before first attempt
+                        }
+                    } else {
+                        logError(`History request for ${symbol} failed: ${data.error}`);
+                    }
+                }).catch(err => {
+                    logError(`History request for ${symbol} failed: ${err.message}`);
+                });
         }
         updateBackendWatchlist();
     };

@@ -8,9 +8,23 @@
 </head>
 <body>
     <div class="app-wrapper">
-        <div id="price-ticker-container">
-            <div id="price-ticker">
-                <!-- Prices will be injected here by JS -->
+        <div id="percentage-ticker-container">
+            <div id="percentage-ticker">
+                <!-- Percentage changes will be injected here by JS -->
+            </div>
+        </div>
+        <div id="top-data-container">
+            <div id="price-display-box" class="data-box">
+                <span id="current-price">-.--</span>
+            </div>
+            <div id="chart-box-1" class="data-box">
+                <canvas id="accum-chart"></canvas>
+            </div>
+            <div id="chart-box-2" class="data-box">
+                <canvas id="rsi-chart"></canvas>
+            </div>
+            <div id="chart-box-3" class="data-box">
+                <canvas id="rsi-daily-chart"></canvas>
             </div>
         </div>
         <div class="main-container">
