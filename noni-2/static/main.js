@@ -789,11 +789,10 @@ const drawRsiChart = (mousePosition = null) => {
                     const rsiPeriod = 14; // Standard RSI period
 
                     // Process 30-minute data for the first RSI chart
-                    if (result.data.data.data_30m && result.data.data.data_30m.candles) {
-                        const candles30m = result.data.data.data_30m.candles;
+                    if (result.data && result.data.data_30m && result.data.data_30m.candles) {
+                        const candles30m = result.data.data_30m.candles;
                         const prices30m = candles30m.map(c => c.close);
                         const rsiValues30m = calculateRSI(prices30m, rsiPeriod);
-                        // Align RSI values with their corresponding candle's datetime
                         rsiHistory = rsiValues30m.map((rsi, index) => ({
                             value: rsi,
                             datetime: candles30m[index + rsiPeriod].datetime
@@ -806,11 +805,10 @@ const drawRsiChart = (mousePosition = null) => {
                     }
 
                     // Process daily data for the second RSI chart
-                    if (result.data.data.data_daily && result.data.data.data_daily.candles) {
-                        const candlesDaily = result.data.data.data_daily.candles;
+                    if (result.data && result.data.data_daily && result.data.data_daily.candles) {
+                        const candlesDaily = result.data.data_daily.candles;
                         const pricesDaily = candlesDaily.map(c => c.close);
                         const rsiValuesDaily = calculateRSI(pricesDaily, rsiPeriod);
-                        // Align RSI values with their corresponding candle's datetime
                         rsiDailyHistory = rsiValuesDaily.map((rsi, index) => ({
                             value: rsi,
                             datetime: candlesDaily[index + rsiPeriod].datetime
