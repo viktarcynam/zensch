@@ -88,7 +88,11 @@ document.addEventListener('DOMContentLoaded', () => {
         item.className = 'pct-item';
 
         const value = Math.abs(percentageChange);
-        item.textContent = `${value.toFixed(1)}%`;
+        let formattedValue = value.toFixed(1);
+        if (formattedValue.startsWith('0.')) {
+            formattedValue = formattedValue.substring(1); // Removes the leading '0'
+        }
+        item.textContent = formattedValue; // No '%' sign
 
         if (percentageChange > 0) {
             item.classList.add('pct-green');
@@ -149,83 +153,183 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
-    const drawRsiDailyChart = () => {
-        const canvas = document.getElementById('rsi-daily-chart');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+const drawRsiDailyChart = (mousePosition = null) => {
+    const canvas = document.getElementById('rsi-daily-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (rsiDailyHistory.length < 2) return;
+    if (rsiDailyHistory.length < 2) {
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'grey';
+        ctx.textAlign = 'center';
+        ctx.fillText('No Daily History Available', canvas.width / 2, canvas.height / 2);
+        return;
+    }
 
-        const mapY = (val) => canvas.height - (val / 100) * canvas.height;
-        const mapX = (index) => (index / (rsiDailyHistory.length - 1)) * canvas.width;
+    const mapY = (val) => canvas.height - (val / 100) * canvas.height;
+    const mapX = (index) => (index / (rsiDailyHistory.length - 1)) * canvas.width;
 
-        // Draw reference lines at 30 and 70
-        [30, 70].forEach(level => {
-            const y = mapY(level);
-            ctx.beginPath();
-            ctx.strokeStyle = '#8B4513'; // A more visible saddle brown color
-            ctx.setLineDash([2, 2]);
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
-            ctx.stroke();
-        });
-        ctx.setLineDash([]);
-
-        // Draw RSI line
+    // Draw reference lines at 30 and 70
+    [30, 70].forEach(level => {
+        const y = mapY(level);
         ctx.beginPath();
-        ctx.strokeStyle = '#FFD700'; // Gold color for daily RSI
-        ctx.lineWidth = 1.5;
-        rsiDailyHistory.forEach((point, index) => {
-            const x = mapX(index);
-            const y = mapY(point);
-            if (index === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        });
+        ctx.strokeStyle = '#8B4513';
+        ctx.setLineDash([2, 2]);
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
         ctx.stroke();
-    };
+    });
+    ctx.setLineDash([]);
 
-    const drawRsiChart = () => {
-        const canvas = document.getElementById('rsi-chart');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+    // Draw RSI line
+    ctx.beginPath();
+    ctx.strokeStyle = '#FFD700'; // Gold color for daily RSI
+    ctx.lineWidth = 1.5;
+    rsiDailyHistory.forEach((point, index) => {
+        const x = mapX(index);
+        const y = mapY(point.value);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
 
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // --- Tooltip and Guideline Logic ---
+    if (mousePosition && rsiDailyHistory.length > 1) {
+        const dataIndex = Math.round((mousePosition.x / canvas.width) * (rsiDailyHistory.length - 1));
+        const dataPoint = rsiDailyHistory[dataIndex];
 
-        if (rsiHistory.length < 2) return;
+        if (dataPoint) {
+            const xPos = mapX(dataIndex);
 
-        const mapY = (val) => canvas.height - (val / 100) * canvas.height;
-        const mapX = (index) => (index / (rsiHistory.length - 1)) * canvas.width;
-
-        // Draw reference lines at 30 and 70
-        [30, 70].forEach(level => {
-            const y = mapY(level);
+            // Draw vertical guideline
             ctx.beginPath();
-            ctx.strokeStyle = '#8B4513'; // A more visible saddle brown color
-            ctx.setLineDash([2, 2]);
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.setLineDash([3, 3]);
+            ctx.moveTo(xPos, 0);
+            ctx.lineTo(xPos, canvas.height);
             ctx.stroke();
-        });
-        ctx.setLineDash([]);
+            ctx.setLineDash([]);
 
-        // Draw RSI line
+            // Prepare tooltip text
+            // const date = new Date(dataPoint.datetime);
+            // const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
+            const text = `RSI: ${dataPoint.value.toFixed(2)}`;
+
+            // Draw tooltip
+            ctx.font = '11px Arial';
+            const textWidth = ctx.measureText(text).width;
+            const padding = 5;
+            let tooltipX = xPos + padding * 2;
+            let tooltipY = mousePosition.y - 20;
+
+            // Adjust position to keep tooltip within canvas bounds
+            if (tooltipX + textWidth + padding > canvas.width) {
+                tooltipX = xPos - textWidth - (padding * 2);
+            }
+            if (tooltipY < 0) {
+                tooltipY = mousePosition.y + 10;
+            }
+
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
+            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(text, tooltipX, tooltipY);
+        }
+    }
+};
+
+const drawRsiChart = (mousePosition = null) => {
+    const canvas = document.getElementById('rsi-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (rsiHistory.length < 2) {
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'grey';
+        ctx.textAlign = 'center';
+        ctx.fillText('No 30m History Available', canvas.width / 2, canvas.height / 2);
+        return;
+    }
+
+    const mapY = (val) => canvas.height - (val / 100) * canvas.height;
+    const mapX = (index) => (index / (rsiHistory.length - 1)) * canvas.width;
+
+    // Draw reference lines at 30 and 70
+    [30, 70].forEach(level => {
+        const y = mapY(level);
         ctx.beginPath();
-        ctx.strokeStyle = '#d8a0ff'; // Purple color
-        ctx.lineWidth = 1.5;
-        rsiHistory.forEach((point, index) => {
-            const x = mapX(index);
-            const y = mapY(point);
-            if (index === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        });
+        ctx.strokeStyle = '#8B4513';
+        ctx.setLineDash([2, 2]);
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
         ctx.stroke();
-    };
+    });
+    ctx.setLineDash([]);
+
+    // Draw RSI line
+    ctx.beginPath();
+    ctx.strokeStyle = '#d8a0ff'; // Purple color
+    ctx.lineWidth = 1.5;
+    rsiHistory.forEach((point, index) => {
+        const x = mapX(index);
+        const y = mapY(point.value);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // --- Tooltip and Guideline Logic ---
+    if (mousePosition && rsiHistory.length > 1) {
+        const dataIndex = Math.round((mousePosition.x / canvas.width) * (rsiHistory.length - 1));
+        const dataPoint = rsiHistory[dataIndex];
+
+        if (dataPoint) {
+            const xPos = mapX(dataIndex);
+
+            // Draw vertical guideline
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.setLineDash([3, 3]);
+            ctx.moveTo(xPos, 0);
+            ctx.lineTo(xPos, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Prepare tooltip text
+            // const date = new Date(dataPoint.datetime);
+            // const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const text = `RSI: ${dataPoint.value.toFixed(2)}`;
+
+            // Draw tooltip
+            ctx.font = '11px Arial';
+            const textWidth = ctx.measureText(text).width;
+            const padding = 5;
+            let tooltipX = xPos + padding * 2;
+            let tooltipY = mousePosition.y - 20;
+
+            // Adjust position to keep tooltip within canvas bounds
+            if (tooltipX + textWidth + padding > canvas.width) {
+                tooltipX = xPos - textWidth - (padding * 2);
+            }
+            if (tooltipY < 0) {
+                tooltipY = mousePosition.y + 10;
+            }
+
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
+            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(text, tooltipX, tooltipY);
+        }
+    }
+};
 
 
     const drawAccumChart = () => {
@@ -522,8 +626,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // --- MOCK DATA ACTIVATION ---
-            const responsePromise = generateMockData();
-            // const responsePromise = fetch(`/api/options/${symbol}/${strike}/${expiry}`).then(res => res.json());
+            // const responsePromise = generateMockData();
+            const responsePromise = fetch(`/api/options/${symbol}/${strike}/${expiry}`).then(res => res.json());
             // --- END MOCK DATA ACTIVATION ---
 
             const data = await responsePromise;
@@ -694,10 +798,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await response.json();
 
                 if (result.success) {
+                    const rsiPeriod = 14; // Standard RSI period
+
                     // Process 30-minute data for the first RSI chart
-                    if (result.data.data.data_30m && result.data.data.data_30m.candles) {
-                        const prices30m = result.data.data.data_30m.candles.map(c => c.close);
-                        rsiHistory = calculateRSI(prices30m);
+                    if (result.data && result.data.data && result.data.data.data_30m && result.data.data.data_30m.candles) {
+                        const candles30m = result.data.data.data_30m.candles;
+                        const prices30m = candles30m.map(c => c.close);
+                        const rsiValues30m = calculateRSI(prices30m, rsiPeriod);
+                        rsiHistory = rsiValues30m.map((rsi, index) => ({
+                            value: rsi,
+                            datetime: candles30m[index + rsiPeriod].datetime
+                        }));
                         drawRsiChart();
                     } else {
                         logError(`Could not process 30m history for ${symbol}.`);
@@ -706,9 +817,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     // Process daily data for the second RSI chart
-                    if (result.data.data.data_daily && result.data.data.data_daily.candles) {
-                        const pricesDaily = result.data.data.data_daily.candles.map(c => c.close);
-                        rsiDailyHistory = calculateRSI(pricesDaily);
+                    if (result.data && result.data.data && result.data.data.data_daily && result.data.data.data_daily.candles) {
+                        const candlesDaily = result.data.data.data_daily.candles;
+                        const pricesDaily = candlesDaily.map(c => c.close);
+                        const rsiValuesDaily = calculateRSI(pricesDaily, rsiPeriod);
+                        rsiDailyHistory = rsiValuesDaily.map((rsi, index) => ({
+                            value: rsi,
+                            datetime: candlesDaily[index + rsiPeriod].datetime
+                        }));
                         drawRsiDailyChart();
                     } else {
                         logError(`Could not process daily history for ${symbol}.`);
@@ -1265,4 +1381,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Start the app ---
     init();
+
+    // --- Interactive Chart Listeners ---
+    const rsiChartCanvas = document.getElementById('rsi-chart');
+    const rsiDailyChartCanvas = document.getElementById('rsi-daily-chart');
+
+    const createChartMouseHandler = (canvas, dataHistory, drawFn) => {
+        return (e) => {
+            if (dataHistory.length === 0) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            drawFn({ x, y });
+        };
+    };
+
+    const createChartMouseOutHandler = (drawFn) => {
+        return () => drawFn();
+    };
+
+    if (rsiChartCanvas) {
+        rsiChartCanvas.addEventListener('mousemove', createChartMouseHandler(rsiChartCanvas, rsiHistory, drawRsiChart));
+        rsiChartCanvas.addEventListener('mouseout', createChartMouseOutHandler(drawRsiChart));
+    }
+
+    if (rsiDailyChartCanvas) {
+        rsiDailyChartCanvas.addEventListener('mousemove', createChartMouseHandler(rsiDailyChartCanvas, rsiDailyHistory, drawRsiDailyChart));
+        rsiDailyChartCanvas.addEventListener('mouseout', createChartMouseOutHandler(drawRsiDailyChart));
+    }
 });
