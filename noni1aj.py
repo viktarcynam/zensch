@@ -1,0 +1,477 @@
+import argparse
+import sys
+import time
+import yaml
+import random
+from datetime import datetime
+from client import SchwabClient
+from trading_utils import get_nearest_strike, get_next_friday
+
+def load_and_validate_rules(rules_file_path, symbol):
+    """
+    Loads rules from a YAML file and merges them with default values.
+    """
+    default_rules = {
+        'spread': 0.05, 'waitbidask': 60, 'prefercp': 'C', 'preferBS': 'B',
+        'openingmaxtime': 300, 'maxflowretry': 3, 'openretrytime': 60,
+        'openpricefish': 0.03, 'openpricemethod': 'seq', 'closeretrytime': 60,
+        'closepricefish': 0.03, 'closepricemethod': 'seq', 'closingmaxtime': 300,
+        'emergencyclosetime': 120, 'dryrun': False
+    }
+    try:
+        with open(rules_file_path, 'r') as f:
+            user_rules = yaml.safe_load(f) or {}
+        print(f"Successfully loaded rules from {rules_file_path}")
+    except FileNotFoundError:
+        print(f"Error: Rules file '{rules_file_path}' not found. Exiting.")
+        sys.exit(1)
+    except yaml.YAMLError as e:
+        print(f"Error parsing YAML file '{rules_file_path}': {e}. Exiting.")
+        sys.exit(1)
+
+    final_rules = default_rules.copy()
+    final_rules.update(user_rules)
+
+    final_rules['prefercp'] = final_rules['prefercp'].upper()
+    final_rules['preferBS'] = final_rules['preferBS'].upper()
+    if final_rules['prefercp'] not in ['C', 'P']:
+        print(f"Error: Invalid 'prefercp' value '{final_rules['prefercp']}'. Must be 'C' or 'P'. Exiting.")
+        sys.exit(1)
+    if final_rules['preferBS'] not in ['B', 'S']:
+        print(f"Error: Invalid 'preferBS' value '{final_rules['preferBS']}'. Must be 'B' or 'S'. Exiting.")
+        sys.exit(1)
+
+    return final_rules
+
+def get_account_hash(client):
+    """Get the first account hash."""
+    accounts = client.get_linked_accounts()
+    if accounts and accounts.get('success'):
+        account_list = accounts.get('data', [])
+        if account_list:
+            return account_list[0].get('hashValue')
+    print("Error: Could not retrieve account hash.")
+    return None
+
+def create_price_generator(initial_price, fish, method, side):
+    """
+    Creates a generator that yields new prices for replacement orders.
+    """
+    if side.startswith('BUY'):
+        low = initial_price
+        high = round(initial_price + fish, 2)
+    else:  # SELL
+        low = round(initial_price - fish, 2)
+        high = initial_price
+    if low < 0: low = 0.01
+
+    if method == 'seq':
+        prices = [round(low + i * 0.01, 2) for i in range(int(abs(high - low) * 100) + 1)]
+        if not prices: prices = [low]
+        current_index = 0
+        while True:
+            yield prices[current_index]
+            current_index = (current_index + 1) % len(prices)
+    else:  # random
+        while True:
+            yield round(random.uniform(low, high), 2)
+
+def handle_opening_state(client, account_hash, args, rules, selected_option):
+    """
+    Manages the logic for placing, monitoring, and replacing the opening order.
+    """
+    side = "BUY_TO_OPEN" if rules['preferBS'] == 'B' else "SELL_TO_OPEN"
+    if side == "BUY_TO_OPEN":
+        initial_price = round(selected_option['bid'] + 0.01, 2)
+    else:
+        initial_price = round(selected_option['ask'] - 0.01, 2)
+    if initial_price <= 0:
+        print(f"Error: Calculated initial price is {initial_price}. Must be positive. Aborting.")
+        return {'status': 'FAILED'}
+
+    print(f"Placing initial opening order: {side} 1 {selected_option['type']} @ {initial_price:.2f}")
+    if not rules['dryrun']:
+        order_response = client.place_option_order(
+            account_id=account_hash, symbol=args.symbol, option_type=selected_option['type'],
+            expiration_date=args.expiry, strike_price=args.strike, quantity=1,
+            side=side, order_type="LIMIT", price=initial_price)
+        if not order_response.get('success'):
+            print(f"Error placing order: {order_response.get('error')}")
+            return {'status': 'FAILED'}
+        current_order_id = order_response.get('data', {}).get('order_id')
+        print(f"Initial order placed. Order ID: {current_order_id}")
+    else:
+        current_order_id = f"dryrun-{int(time.time())}"
+        print(f"DRY RUN: Would have placed order. Simulated Order ID: {current_order_id}")
+
+    opening_start_time = time.time()
+    last_replacement_time = time.time()
+    price_generator = create_price_generator(initial_price, rules['openpricefish'], rules['openpricemethod'], side)
+    current_price = initial_price
+    while time.time() - opening_start_time < rules['openingmaxtime']:
+        if not rules['dryrun']:
+            details_response = client.get_option_order_details(account_id=account_hash, order_id=current_order_id)
+            if details_response.get('success'):
+                status = details_response.get('data', {}).get('status')
+                if status == 'FILLED':
+                    print(f"\nSUCCESS: Opening order {current_order_id} filled!")
+                    return {'status': 'FILLED', 'order': details_response.get('data')}
+                elif status in ['CANCELED', 'REJECTED', 'EXPIRED']:
+                    print(f"\nOrder {current_order_id} is dead ({status}). Aborting opening state.")
+                    return {'status': 'FAILED'}
+        if time.time() - last_replacement_time > rules['openretrytime']:
+            new_price = next(price_generator)
+            if abs(new_price - current_price) > 0.001:
+                current_price = new_price
+                print(f"\nOpen order not filled after {rules['openretrytime']}s. Replacing with new price: {current_price:.2f}")
+                if not rules['dryrun']:
+                    replace_response = client.replace_option_order(
+                        account_id=account_hash, order_id=current_order_id, symbol=args.symbol,
+                        option_type=selected_option['type'], expiration_date=args.expiry,
+                        strike_price=args.strike, quantity=1, side=side, order_type="LIMIT", price=current_price)
+                    if replace_response.get('success'):
+                        new_order_id = replace_response.get('data', {}).get('new_order_id')
+                        print(f"Replacement successful. New Order ID: {new_order_id}")
+                        current_order_id = new_order_id
+                    else:
+                        print(f"Error replacing order: {replace_response.get('error')}")
+                else:
+                    current_order_id = f"dryrun-{int(time.time())}"
+                    print(f"DRY RUN: Would have replaced order. New simulated Order ID: {current_order_id}")
+                last_replacement_time = time.time()
+        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Monitoring opening order {current_order_id}...", end='\r')
+        time.sleep(5)
+
+    print("\nOpening state timed out. Cancelling order.")
+    if not rules['dryrun']:
+        client.cancel_option_order(account_id=account_hash, order_id=current_order_id)
+    else:
+        print(f"DRY RUN: Would have cancelled order {current_order_id}")
+    return {'status': 'TIMEOUT'}
+
+def handle_closing_state(client, account_hash, args, rules, filled_opening_order):
+    """
+    Manages the logic for placing and monitoring the closing order.
+    """
+    opening_leg = filled_opening_order['orderLegCollection'][0]
+    side = "SELL_TO_CLOSE" if opening_leg['instruction'] == "BUY_TO_OPEN" else "BUY_TO_CLOSE"
+    quantity = opening_leg['quantity']
+    option_type = opening_leg['instrument']['putCall']
+
+    print(f"\nFetching latest quote to determine initial closing price...")
+    chain_response = client.get_option_chains(symbol=args.symbol, strike=args.strike, fromDate=args.expiry, toDate=args.expiry, contractType=option_type)
+    if not chain_response.get('success') or not chain_response.get('data'):
+        print("Error: Could not fetch latest quote for closing order. Aborting.")
+        return {'status': 'FAILED'}
+    try:
+        exp_map_key = 'callExpDateMap' if option_type == 'CALL' else 'putExpDateMap'
+        date_key = next(iter(chain_response['data'][exp_map_key]))
+        option_data = chain_response['data'][exp_map_key][date_key][str(float(args.strike))][0]
+        latest_bid = option_data.get('bid', 0.0)
+        latest_ask = option_data.get('ask', 0.0)
+    except (KeyError, IndexError, StopIteration):
+        print("Error: Could not parse latest quote from option chain. Aborting.")
+        return {'status': 'FAILED'}
+
+    if side == "SELL_TO_CLOSE":
+        initial_price = round(latest_ask - 0.01, 2)
+    else:
+        initial_price = round(latest_bid + 0.01, 2)
+    if initial_price <= 0:
+        print(f"Error: Calculated initial closing price is {initial_price}. Must be positive. Aborting.")
+        return {'status': 'FAILED'}
+
+    print(f"Placing initial closing order: {side} {quantity} {option_type} @ {initial_price:.2f}")
+    if not rules['dryrun']:
+        order_response = client.place_option_order(
+            account_id=account_hash, symbol=args.symbol, option_type=option_type,
+            expiration_date=args.expiry, strike_price=args.strike, quantity=quantity,
+            side=side, order_type="LIMIT", price=initial_price)
+        if not order_response.get('success'):
+            print(f"Error placing closing order: {order_response.get('error')}")
+            return {'status': 'FAILED'}
+        current_order_id = order_response.get('data', {}).get('order_id')
+        print(f"Initial closing order placed. Order ID: {current_order_id}")
+    else:
+        current_order_id = f"dryrun-close-{int(time.time())}"
+        print(f"DRY RUN: Would have placed closing order. Simulated Order ID: {current_order_id}")
+
+    closing_start_time = time.time()
+    last_replacement_time = time.time()
+    price_generator = create_price_generator(initial_price, rules['closepricefish'], rules['closepricemethod'], side)
+    current_price = initial_price
+    while time.time() - closing_start_time < rules['closingmaxtime']:
+        if not rules['dryrun']:
+            details_response = client.get_option_order_details(account_id=account_hash, order_id=current_order_id)
+            if details_response.get('success'):
+                status = details_response.get('data', {}).get('status')
+                if status == 'FILLED':
+                    print(f"\nSUCCESS: Closing order {current_order_id} filled!")
+                    return {'status': 'CLOSED', 'order': details_response.get('data')}
+                elif status in ['CANCELED', 'REJECTED', 'EXPIRED']:
+                    print(f"\nOrder {current_order_id} is dead ({status}). Aborting.")
+                    return {'status': 'FAILED'}
+        if time.time() - last_replacement_time > rules['closeretrytime']:
+            new_price = next(price_generator)
+            if abs(new_price - current_price) > 0.001:
+                current_price = new_price
+                print(f"\nClosing order not filled after {rules['closeretrytime']}s. Replacing with new price: {current_price:.2f}")
+                if not rules['dryrun']:
+                    replace_response = client.replace_option_order(
+                        account_id=account_hash, order_id=current_order_id, symbol=args.symbol,
+                        option_type=option_type, expiration_date=args.expiry, strike_price=args.strike,
+                        quantity=quantity, side=side, order_type="LIMIT", price=current_price)
+                    if replace_response.get('success'):
+                        new_order_id = replace_response.get('data', {}).get('new_order_id')
+                        print(f"Replacement successful. New Order ID: {new_order_id}")
+                        current_order_id = new_order_id
+                    else:
+                        print(f"Error replacing closing order: {replace_response.get('error')}")
+                else:
+                    current_order_id = f"dryrun-close-{int(time.time())}"
+                    print(f"DRY RUN: Would have replaced closing order. New simulated Order ID: {current_order_id}")
+                last_replacement_time = time.time()
+        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Monitoring closing order {current_order_id}...", end='\r')
+        time.sleep(5)
+
+    print("\nClosing state timed out. Cancelling order before emergency close.")
+    if not rules['dryrun']:
+        client.cancel_option_order(account_id=account_hash, order_id=current_order_id)
+    else:
+        print(f"DRY RUN: Would have cancelled order {current_order_id}")
+    return {'status': 'TIMEOUT'}
+
+def print_bold(text):
+    """Prints text in bold using ANSI escape codes."""
+    print(f"\033[1m{text}\033[0m")
+
+def handle_emergency_close(client, account_hash, args, rules, filled_opening_order):
+    """
+    Final attempt to close the position at the break-even price.
+    """
+    try:
+        opening_leg = filled_opening_order['orderLegCollection'][0]
+        opening_activity = filled_opening_order['orderActivityCollection'][0]['executionLegs'][0]
+        side = "SELL_TO_CLOSE" if opening_leg['instruction'] == "BUY_TO_OPEN" else "BUY_TO_CLOSE"
+        quantity = opening_leg['quantity']
+        option_type = opening_leg['instrument']['putCall']
+        break_even_price = opening_activity['price']
+    except (KeyError, IndexError):
+        print_bold("\nCRITICAL ERROR: Could not parse filled opening order to determine emergency close parameters.")
+        return {'status': 'UNCLOSED'}
+
+    print(f"Placing emergency closing order: {side} {quantity} {option_type} @ break-even price {break_even_price:.2f}")
+    if not rules['dryrun']:
+        order_response = client.place_option_order(
+            account_id=account_hash, symbol=args.symbol, option_type=option_type,
+            expiration_date=args.expiry, strike_price=args.strike, quantity=quantity,
+            side=side, order_type="LIMIT", price=break_even_price)
+        if not order_response.get('success'):
+            print_bold(f"CRITICAL ERROR: Failed to place emergency close order: {order_response.get('error')}")
+            return {'status': 'UNCLOSED'}
+        current_order_id = order_response.get('data', {}).get('order_id')
+        print(f"Emergency order placed. Order ID: {current_order_id}")
+    else:
+        current_order_id = f"dryrun-emergency-{int(time.time())}"
+        print(f"DRY RUN: Would have placed emergency order. Simulated Order ID: {current_order_id}")
+
+    emergency_start_time = time.time()
+    while time.time() - emergency_start_time < rules['emergencyclosetime']:
+        if not rules['dryrun']:
+            details_response = client.get_option_order_details(account_id=account_hash, order_id=current_order_id)
+            if details_response.get('success') and details_response.get('data', {}).get('status') == 'FILLED':
+                print(f"\nSUCCESS: Emergency closing order {current_order_id} filled!")
+                return {'status': 'CLOSED_EMERGENCY', 'order': details_response.get('data')}
+        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Monitoring emergency order {current_order_id}...", end='\r')
+        time.sleep(5)
+
+    print("\n" + "="*60)
+    print_bold("!!! CRITICAL FAILURE: UNABLE TO CLOSE POSITION AUTOMATICALLY !!!")
+    print_bold("MANUAL INTERVENTION REQUIRED IMMEDIATELY.")
+    print("="*60)
+    print_bold("Position Details:")
+    print_bold(f"  Symbol: {args.symbol.upper()}")
+    print_bold(f"  Type:   {quantity} {option_type} @ Strike {args.strike} Expiring {args.expiry}")
+    print_bold(f"  Side:   {'LONG' if side == 'SELL_TO_CLOSE' else 'SHORT'}")
+    print("="*60)
+    return {'status': 'UNCLOSED'}
+
+def print_trade_summary(open_order, close_order):
+    """Prints a summary of the completed trade."""
+    try:
+        open_leg = open_order['orderActivityCollection'][0]['executionLegs'][0]
+        close_leg = close_order['orderActivityCollection'][0]['executionLegs'][0]
+        entry_price = open_leg['price']
+        exit_price = close_leg['price']
+        quantity = open_leg['quantity']
+        side = open_order['orderLegCollection'][0]['instruction']
+        p_l_per_contract = exit_price - entry_price if side == 'BUY_TO_OPEN' else entry_price - exit_price
+        total_p_l = p_l_per_contract * quantity * 100
+        print("\n" + "="*30)
+        print_bold("Trade Summary")
+        print(f"  Entry Price: {entry_price:.2f}")
+        print(f"  Exit Price:  {exit_price:.2f}")
+        print(f"  P/L:         ${total_p_l:.2f}")
+        print("="*30)
+    except (KeyError, IndexError, TypeError) as e:
+        print("\nCould not generate trade summary due to unexpected order format.")
+        print(f"Error: {e}")
+
+def run_bot(args, rules):
+    """
+    The main bot logic, containing the full state machine.
+    """
+    print("\nConfiguration:")
+    print(f"  Symbol: {args.symbol}")
+    print(f"  Strike: {args.strike if args.strike else 'Default (to be determined)'}")
+    print(f"  Expiry: {args.expiry if args.expiry else 'Default (to be determined)'}")
+    print("  Rules:")
+    for key, value in rules.items():
+        print(f"    {key}: {value}")
+    print("-" * 20)
+
+    with SchwabClient() as client:
+        account_hash = get_account_hash(client)
+        if not account_hash:
+            return
+
+        if not args.strike or not args.expiry:
+            print("Strike or expiry not provided, fetching defaults...")
+            quotes_response = client.get_quotes(symbols=[args.symbol])
+            if not quotes_response.get('success') or not quotes_response.get('data'):
+                print(f"Could not retrieve quote for {args.symbol} to determine defaults. Exiting.")
+                return
+            try:
+                quote_string = quotes_response['data'][0]
+                last_price = float(quote_string.split()[1])
+                print(f"Current price for {args.symbol}: {last_price:.2f}")
+            except (ValueError, IndexError):
+                print(f"Could not parse last price for {args.symbol}. Exiting.")
+                return
+            if not args.strike:
+                args.strike = get_nearest_strike(last_price)
+                print(f"Using default strike: {args.strike:.2f}")
+            if not args.expiry:
+                args.expiry = get_next_friday()
+                print(f"Using default expiry: {args.expiry}")
+
+        print("\nFinal Configuration:")
+        print(f"  Strike: {args.strike:.2f}")
+        print(f"  Expiry: {args.expiry}")
+        print("-" * 20)
+
+        retries_left = rules.get('maxflowretry', 1)
+        while retries_left > 0:
+            print(f"\n--- Starting Flow Attempt ({rules.get('maxflowretry', 1) - retries_left + 1}/{rules.get('maxflowretry', 1)}) ---")
+            # --- SEARCHING STATE ---
+            print("--- Entering Searching State ---")
+            search_start_time = time.time()
+            wait_time = rules['waitbidask']
+            selected_option = None
+            while time.time() - search_start_time < wait_time:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Fetching option chain...")
+                option_chain_response = client.get_option_chains(symbol=args.symbol, strike=args.strike, fromDate=args.expiry, toDate=args.expiry, contractType='ALL')
+                if not option_chain_response.get('success') or not option_chain_response.get('data'):
+                    print(f"  Could not retrieve option chain: {option_chain_response.get('error')}")
+                    time.sleep(5)
+                    continue
+                option_chain_data = option_chain_response.get('data', {})
+                call_map = option_chain_data.get('callExpDateMap', {})
+                put_map = option_chain_data.get('putExpDateMap', {})
+                call_data, put_data = None, None
+                date_key_call = next((k for k in call_map if k.startswith(args.expiry)), None)
+                if date_key_call:
+                    call_data = call_map.get(date_key_call, {}).get(str(float(args.strike)), [None])[0]
+                date_key_put = next((k for k in put_map if k.startswith(args.expiry)), None)
+                if date_key_put:
+                    put_data = put_map.get(date_key_put, {}).get(str(float(args.strike)), [None])[0]
+                if not call_data or not put_data:
+                    print("  Could not find option data for the specified strike and date.")
+                    time.sleep(5)
+                    continue
+                call_bid = call_data.get('bid', 0.0); call_ask = call_data.get('ask', 0.0)
+                put_bid = put_data.get('bid', 0.0); put_ask = put_data.get('ask', 0.0)
+                call_spread = call_ask - call_bid; put_spread = put_ask - put_bid
+                print(f"  CALL: Bid={call_bid:.2f}, Ask={call_ask:.2f}, Spread={call_spread:.2f}")
+                print(f"  PUT:  Bid={put_bid:.2f}, Ask={put_ask:.2f}, Spread={put_spread:.2f}")
+                min_spread = rules['spread']
+                call_valid = call_spread >= min_spread and call_bid > 0 and call_ask > 0
+                put_valid = put_spread >= min_spread and put_bid > 0 and put_ask > 0
+                if not (call_valid or put_valid):
+                    print(f"  Spread for both is below the minimum of {min_spread:.2f} or prices are zero. Waiting...")
+                    time.sleep(5)
+                    continue
+                if call_valid and put_valid:
+                    print(f"  Both CALL and PUT are valid. Preferring '{rules['prefercp']}'.")
+                    selected_option = {'type': 'CALL', 'bid': call_bid, 'ask': call_ask} if rules['prefercp'] == 'C' else {'type': 'PUT', 'bid': put_bid, 'ask': put_ask}
+                elif call_valid:
+                    print("  CALL is valid.")
+                    selected_option = {'type': 'CALL', 'bid': call_bid, 'ask': call_ask}
+                else:
+                    print("  PUT is valid.")
+                    selected_option = {'type': 'PUT', 'bid': put_bid, 'ask': put_ask}
+                break
+
+            if selected_option:
+                print(f"\n--- Found suitable option: {selected_option['type']}. Entering Opening State. ---")
+                opening_result = handle_opening_state(client, account_hash, args, rules, selected_option)
+                if opening_result.get('status') == 'FILLED':
+                    print("\n--- Opening Order Filled. Entering Closing State. ---")
+                    closing_result = handle_closing_state(client, account_hash, args, rules, opening_result.get('order'))
+                    if closing_result.get('status') == 'CLOSED':
+                        print("\n--- TRADE COMPLETE: Closing order filled successfully! ---")
+                        print_trade_summary(opening_result.get('order'), closing_result.get('order'))
+                        break
+                    elif closing_result.get('status') == 'TIMEOUT':
+                        print("\n--- Closing state timed out. Entering Emergency Close. ---")
+                        emergency_result = handle_emergency_close(client, account_hash, args, rules, opening_result.get('order'))
+                        if emergency_result.get('status') == 'CLOSED_EMERGENCY':
+                            print("\n--- TRADE COMPLETE: Position closed at break-even during emergency period. ---")
+                            print_trade_summary(opening_result.get('order'), emergency_result.get('order'))
+                        else:
+                            print("\n--- BOT EXITING WITH OPEN POSITION. ---")
+                        break
+                    else:
+                        print("\n--- Closing state failed unexpectedly. Manual intervention may be required. ---")
+                        break
+                else:
+                    print(f"\n--- Opening state failed: {opening_result.get('status')}. ---")
+                    retries_left -= 1
+                    if retries_left > 0:
+                        print(f"Retries left: {retries_left}. Restarting flow...")
+                    else:
+                        print("Max retries exceeded. Exiting.")
+                        break
+            else:
+                print(f"\n--- Search timed out after {wait_time} seconds. No suitable trade found. ---")
+                retries_left -= 1
+                if retries_left > 0:
+                    print(f"Retries left: {retries_left}. Restarting flow...")
+                else:
+                    print("Max retries exceeded. Exiting.")
+                    break
+
+    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] - Bot finished.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="noni1aj - Automated Options Trading Bot")
+    parser.add_argument("--symbol", required=True, help="The stock symbol to trade.")
+    parser.add_argument("--rules-file", help="Path to the YAML rules file. Defaults to <symbol>-rules.yml.")
+    parser.add_argument("--strike", type=float, help="The strike price. Defaults to the nearest strike.")
+    parser.add_argument("--expiry", help="The expiry date (YYYY-MM-DD). Defaults to the next Friday.")
+    parser.add_argument("--dry-run", action="store_true", help="Run the bot without placing any real orders.")
+    args = parser.parse_args()
+
+    print("=============================================")
+    print("         noni1aj - Trading Bot         ")
+    print("=============================================")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] - Starting bot for symbol: {args.symbol}")
+
+    rules_file = args.rules_file or f"{args.symbol.lower()}-rules.yml"
+    rules = load_and_validate_rules(rules_file, args.symbol)
+
+    if args.dry_run:
+        print("\n*** DRY RUN MODE ENABLED - NO ORDERS WILL BE PLACED ***\n")
+        rules['dryrun'] = True
+
+    run_bot(args, rules)
