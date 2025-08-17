@@ -203,7 +203,7 @@ def handle_opening_state(client, account_hash, rules, selected_option):
             new_price = next(price_generator)
             if abs(new_price - current_price) > 0.001:
                 current_price = new_price
-                replace_msg = f"[OPENING] Replacing order with new price: {current_price:.2f}"
+                replace_msg = f"[OPENING] Replacing order. New details: {side} 1 {selected_option['type']} @ {current_price:.2f}"
                 print(f"\n{replace_msg}")
                 if run_mode == 'live':
                     replace_response = client.replace_option_order(
@@ -364,7 +364,7 @@ def handle_closing_state(client, account_hash, rules, filled_opening_order):
             new_price = next(price_generator)
             if abs(new_price - current_price) > 0.001:
                 current_price = new_price
-                replace_msg = f"[CLOSING] Replacing order with new price: {current_price:.2f}"
+                replace_msg = f"[CLOSING] Replacing order. New details: {side} {quantity} {option_type} @ {current_price:.2f}"
                 print(f"\n{replace_msg}")
                 if run_mode == 'live':
                     replace_response = client.replace_option_order(
