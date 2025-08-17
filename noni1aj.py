@@ -16,6 +16,7 @@ def load_and_validate_rules(rules_file_path):
         'openretrytime', 'openpricefish', 'openpricemethod', 'closeretrytime',
         'closepricefish', 'closepricemethod', 'closingmaxtime', 'emergencyclosetime'
     ]
+    # strike and expiry are optional in the rules file
     try:
         with open(rules_file_path, 'r') as f:
             rules = yaml.safe_load(f)
@@ -336,22 +337,25 @@ def run_bot(args, rules):
     """
     The main bot logic, containing the full state machine.
     """
-    print("\nConfiguration:")
-    print(f"  Symbol: {args.symbol}")
-    print(f"  Strike: {args.strike if args.strike else 'Default (to be determined)'}")
-    print(f"  Expiry: {args.expiry if args.expiry else 'Default (to be determined)'}")
-    print("  Rules:")
-    for key, value in rules.items():
-        print(f"    {key}: {value}")
-    print("-" * 20)
-
     with SchwabClient() as client:
         account_hash = get_account_hash(client)
         if not account_hash:
             return
 
-        if not args.strike or not args.expiry:
-            print("[SETUP] Strike or expiry not provided, fetching defaults...")
+        # Determine strike and expiry using the new precedence: CLI > Rules File > Dynamic
+        if args.strike is None:
+            args.strike = rules.get('strike')
+            if args.strike:
+                print(f"[SETUP] Using strike from rules file: {args.strike}")
+
+        if args.expiry is None:
+            args.expiry = rules.get('expiry')
+            if args.expiry:
+                print(f"[SETUP] Using expiry from rules file: {args.expiry}")
+
+        # If still not set, calculate dynamically
+        if args.strike is None or args.expiry is None:
+            print("[SETUP] Strike or expiry not found in CLI args or rules file, fetching defaults...")
             quotes_response = client.get_quotes(symbols=[args.symbol])
             if not quotes_response.get('success') or not quotes_response.get('data'):
                 print(f"[SETUP] Error: Could not retrieve quote for {args.symbol} to determine defaults. Exiting.")
@@ -363,12 +367,13 @@ def run_bot(args, rules):
             except (ValueError, IndexError):
                 print(f"[SETUP] Error: Could not parse last price for {args.symbol}. Exiting.")
                 return
-            if not args.strike:
+
+            if args.strike is None:
                 args.strike = get_nearest_strike(last_price)
-                print(f"[SETUP] Using default strike: {args.strike:.2f}")
-            if not args.expiry:
+                print(f"[SETUP] Using dynamically calculated strike: {args.strike:.2f}")
+            if args.expiry is None:
                 args.expiry = get_next_friday()
-                print(f"[SETUP] Using default expiry: {args.expiry}")
+                print(f"[SETUP] Using dynamically calculated expiry: {args.expiry}")
 
         print("\nFinal Configuration:")
         print(f"  Strike: {args.strike:.2f}")

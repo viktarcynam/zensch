@@ -1,0 +1,17 @@
+# Test rules file that includes optional strike and expiry
+strike: 500.0
+expiry: "2025-12-19"
+spread: 0.02
+waitbidask: 10
+prefercp: P
+preferBS: S
+openingmaxtime: 20
+maxflowretry: 1
+openretrytime: 5
+openpricefish: 0.02
+openpricemethod: random
+closeretrytime: 5
+closepricefish: 0.02
+closepricemethod: random
+closingmaxtime: 20
+emergencyclosetime: 10
