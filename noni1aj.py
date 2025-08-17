@@ -107,8 +107,10 @@ def handle_opening_state(client, account_hash, args, rules, selected_option):
         current_order_id = order_response.get('data', {}).get('order_id')
         print(f"[OPENING] Initial order placed. Order ID: {current_order_id}")
     else:
-        current_order_id = f"dryrun-{int(time.time())}"
+        current_order_id = f"dryrun-open-{int(time.time())}"
         print(f"[DRY RUN] [OPENING] Simulated Order ID: {current_order_id}")
+        # In dry run, schedule a random fill time
+        mock_fill_time = time.time() + random.uniform(5, rules['openingmaxtime'] * 0.8)
 
     opening_start_time = time.time()
     last_replacement_time = time.time()
@@ -125,6 +127,16 @@ def handle_opening_state(client, account_hash, args, rules, selected_option):
                 elif status in ['CANCELED', 'REJECTED', 'EXPIRED']:
                     print(f"\n[OPENING] Order {current_order_id} is dead ({status}). Aborting.")
                     return {'status': 'FAILED'}
+
+        # In dry run, check if it's time to simulate the fill
+        if rules['dryrun'] and time.time() > mock_fill_time:
+            print(f"\n[DRY RUN] [OPENING] Simulating a FILLED order.")
+            fake_filled_order = {
+                'orderLegCollection': [{'instruction': side, 'quantity': 1, 'instrument': {'putCall': selected_option['type']}}],
+                'orderActivityCollection': [{'executionLegs': [{'price': current_price, 'quantity': 1}]}]
+            }
+            return {'status': 'FILLED', 'order': fake_filled_order}
+
         if time.time() - last_replacement_time > rules['openretrytime']:
             new_price = next(price_generator)
             if abs(new_price - current_price) > 0.001:
@@ -205,6 +217,11 @@ def handle_closing_state(client, account_hash, args, rules, filled_opening_order
     else:
         current_order_id = f"dryrun-close-{int(time.time())}"
         print(f"[DRY RUN] [CLOSING] Simulated Order ID: {current_order_id}")
+        # In dry run, schedule a random outcome
+        mock_outcome = random.choice(['FILLED', 'TIMEOUT'])
+        print(f"[DRY RUN] [CLOSING] This order's simulated outcome will be: {mock_outcome}")
+        if mock_outcome == 'FILLED':
+            mock_fill_time = time.time() + random.uniform(5, rules['closingmaxtime'] * 0.8)
 
     closing_start_time = time.time()
     last_replacement_time = time.time()
@@ -221,6 +238,16 @@ def handle_closing_state(client, account_hash, args, rules, filled_opening_order
                 elif status in ['CANCELED', 'REJECTED', 'EXPIRED']:
                     print(f"\n[CLOSING] Order {current_order_id} is dead ({status}). Aborting.")
                     return {'status': 'FAILED'}
+
+        # In dry run, check if it's time to simulate the fill
+        if rules['dryrun'] and mock_outcome == 'FILLED' and time.time() > mock_fill_time:
+            print(f"\n[DRY RUN] [CLOSING] Simulating a FILLED order.")
+            fake_filled_order = {
+                'orderLegCollection': [{'instruction': side, 'quantity': quantity, 'instrument': {'putCall': option_type}}],
+                'orderActivityCollection': [{'executionLegs': [{'price': current_price, 'quantity': quantity}]}]
+            }
+            return {'status': 'CLOSED', 'order': fake_filled_order}
+
         if time.time() - last_replacement_time > rules['closeretrytime']:
             new_price = next(price_generator)
             if abs(new_price - current_price) > 0.001:
@@ -288,6 +315,11 @@ def handle_emergency_close(client, account_hash, args, rules, filled_opening_ord
     else:
         current_order_id = f"dryrun-emergency-{int(time.time())}"
         print(f"[DRY RUN] [EMERGENCY] Simulated Order ID: {current_order_id}")
+        # In dry run, schedule a random outcome
+        mock_outcome = random.choice(['CLOSED_EMERGENCY', 'UNCLOSED'])
+        print(f"[DRY RUN] [EMERGENCY] This order's simulated outcome will be: {mock_outcome}")
+        if mock_outcome == 'CLOSED_EMERGENCY':
+            mock_fill_time = time.time() + random.uniform(2, rules['emergencyclosetime'] * 0.8)
 
     emergency_start_time = time.time()
     while time.time() - emergency_start_time < rules['emergencyclosetime']:
@@ -296,6 +328,15 @@ def handle_emergency_close(client, account_hash, args, rules, filled_opening_ord
             if details_response.get('success') and details_response.get('data', {}).get('status') == 'FILLED':
                 print(f"\n[EMERGENCY] SUCCESS: Order {current_order_id} filled!")
                 return {'status': 'CLOSED_EMERGENCY', 'order': details_response.get('data')}
+
+        # In dry run, check if it's time to simulate the fill
+        if rules['dryrun'] and mock_outcome == 'CLOSED_EMERGENCY' and time.time() > mock_fill_time:
+            print(f"\n[DRY RUN] [EMERGENCY] Simulating a FILLED order.")
+            fake_filled_order = {
+                'orderLegCollection': [{'instruction': side, 'quantity': quantity, 'instrument': {'putCall': option_type}}],
+                'orderActivityCollection': [{'executionLegs': [{'price': break_even_price, 'quantity': quantity}]}]
+            }
+            return {'status': 'CLOSED_EMERGENCY', 'order': fake_filled_order}
 
         status_msg = f"[EMERGENCY] Monitoring order {current_order_id}..."
         print(f"  {status_msg}", end='\r')
@@ -495,4 +536,5 @@ if __name__ == "__main__":
         print("\n*** DRY RUN MODE ENABLED - NO ORDERS WILL BE PLACED ***\n")
         rules['dryrun'] = True
 
+    # Initialize the bot's main logic
     run_bot(args, rules)
