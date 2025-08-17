@@ -1316,7 +1316,7 @@ const drawRsiChart = (mousePosition = null) => {
 
     const createChartMouseHandler = (canvas, dataHistory, drawFn) => {
         return (e) => {
-            if (dataHistory.length === 0) return;
+            // if (dataHistory.length === 0) return; // Temporarily removed for debugging
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
