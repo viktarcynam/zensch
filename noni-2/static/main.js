@@ -45,6 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let accumHistory = [];
     let rsiHistory = [];
     let rsiDailyHistory = [];
+    let rsiChartMousePosition = null;
+    let rsiDailyChartMousePosition = null;
 
     // --- MOCK DATA GENERATOR (for testing without live data) ---
     let mockPrice = null;
@@ -153,7 +155,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
-const drawRsiDailyChart = (mousePosition = null) => {
+const drawRsiDailyChart = (mousePosition) => {
+    // If no explicit mouse position is passed, use the stored one.
+    const effectiveMousePosition = mousePosition || rsiDailyChartMousePosition;
+
     const canvas = document.getElementById('rsi-daily-chart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -198,8 +203,8 @@ const drawRsiDailyChart = (mousePosition = null) => {
     ctx.stroke();
 
     // --- Tooltip and Guideline Logic ---
-    if (mousePosition && rsiDailyHistory.length > 1) {
-        const dataIndex = Math.round((mousePosition.x / canvas.width) * (rsiDailyHistory.length - 1));
+    if (effectiveMousePosition && rsiDailyHistory.length > 1) {
+        const dataIndex = Math.round((effectiveMousePosition.x / canvas.width) * (rsiDailyHistory.length - 1));
         const dataPoint = rsiDailyHistory[dataIndex];
 
         if (dataPoint) {
@@ -215,34 +220,42 @@ const drawRsiDailyChart = (mousePosition = null) => {
             ctx.setLineDash([]);
 
             // Prepare tooltip text
-            // const date = new Date(dataPoint.datetime);
-            // const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
-            const text = `RSI: ${dataPoint.value.toFixed(2)}`;
+            const date = new Date(dataPoint.datetime);
+            const line1 = `RSI: ${dataPoint.value.toFixed(2)}`;
+            const line2 = `${date.getMonth() + 1}/${date.getDate()}`;
 
             // Draw tooltip
             ctx.font = '11px Arial';
-            const textWidth = ctx.measureText(text).width;
+            const textWidth1 = ctx.measureText(line1).width;
+            const textWidth2 = ctx.measureText(line2).width;
+            const maxWidth = Math.max(textWidth1, textWidth2);
             const padding = 5;
-            let tooltipX = xPos + padding * 2;
-            let tooltipY = mousePosition.y - 20;
+            const boxWidth = maxWidth + (padding * 2);
+            const boxHeight = 30; // Height for two lines
+            let tooltipX;
 
-            // Adjust position to keep tooltip within canvas bounds
-            if (tooltipX + textWidth + padding > canvas.width) {
-                tooltipX = xPos - textWidth - (padding * 2);
+            // Smartly position the tooltip to avoid going off-screen
+            if (xPos + padding + boxWidth > canvas.width) {
+                tooltipX = xPos - boxWidth - padding;
+            } else {
+                tooltipX = xPos + padding;
             }
-            if (tooltipY < 0) {
-                tooltipY = mousePosition.y + 10;
-            }
+
+            let tooltipY = 15; // Fixed Y position at the top
 
             ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
-            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
+            ctx.fillRect(tooltipX, tooltipY - 12, boxWidth, boxHeight);
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(text, tooltipX, tooltipY);
+            ctx.fillText(line1, tooltipX + padding, tooltipY);
+            ctx.fillText(line2, tooltipX + padding, tooltipY + 12);
         }
     }
 };
 
-const drawRsiChart = (mousePosition = null) => {
+const drawRsiChart = (mousePosition) => {
+    // If no explicit mouse position is passed, use the stored one.
+    const effectiveMousePosition = mousePosition || rsiChartMousePosition;
+
     const canvas = document.getElementById('rsi-chart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -287,8 +300,8 @@ const drawRsiChart = (mousePosition = null) => {
     ctx.stroke();
 
     // --- Tooltip and Guideline Logic ---
-    if (mousePosition && rsiHistory.length > 1) {
-        const dataIndex = Math.round((mousePosition.x / canvas.width) * (rsiHistory.length - 1));
+    if (effectiveMousePosition && rsiHistory.length > 1) {
+        const dataIndex = Math.round((effectiveMousePosition.x / canvas.width) * (rsiHistory.length - 1));
         const dataPoint = rsiHistory[dataIndex];
 
         if (dataPoint) {
@@ -304,29 +317,34 @@ const drawRsiChart = (mousePosition = null) => {
             ctx.setLineDash([]);
 
             // Prepare tooltip text
-            // const date = new Date(dataPoint.datetime);
-            // const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-            const text = `RSI: ${dataPoint.value.toFixed(2)}`;
+            const date = new Date(dataPoint.datetime);
+            const line1 = `RSI: ${dataPoint.value.toFixed(2)}`;
+            const line2 = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
             // Draw tooltip
             ctx.font = '11px Arial';
-            const textWidth = ctx.measureText(text).width;
+            const textWidth1 = ctx.measureText(line1).width;
+            const textWidth2 = ctx.measureText(line2).width;
+            const maxWidth = Math.max(textWidth1, textWidth2);
             const padding = 5;
-            let tooltipX = xPos + padding * 2;
-            let tooltipY = mousePosition.y - 20;
+            const boxWidth = maxWidth + (padding * 2);
+            const boxHeight = 30; // Height for two lines
+            let tooltipX;
 
-            // Adjust position to keep tooltip within canvas bounds
-            if (tooltipX + textWidth + padding > canvas.width) {
-                tooltipX = xPos - textWidth - (padding * 2);
+            // Smartly position the tooltip to avoid going off-screen
+            if (xPos + padding + boxWidth > canvas.width) {
+                tooltipX = xPos - boxWidth - padding;
+            } else {
+                tooltipX = xPos + padding;
             }
-            if (tooltipY < 0) {
-                tooltipY = mousePosition.y + 10;
-            }
+
+            let tooltipY = 15; // Fixed Y position at the top
 
             ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
-            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
+            ctx.fillRect(tooltipX, tooltipY - 12, boxWidth, boxHeight);
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(text, tooltipX, tooltipY);
+            ctx.fillText(line1, tooltipX + padding, tooltipY);
+            ctx.fillText(line2, tooltipX + padding, tooltipY + 12);
         }
     }
 };
@@ -1386,27 +1404,29 @@ const drawRsiChart = (mousePosition = null) => {
     const rsiChartCanvas = document.getElementById('rsi-chart');
     const rsiDailyChartCanvas = document.getElementById('rsi-daily-chart');
 
-    const createChartMouseHandler = (canvas, dataHistory, drawFn) => {
-        return (e) => {
-            if (dataHistory.length === 0) return;
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            drawFn({ x, y });
-        };
-    };
-
-    const createChartMouseOutHandler = (drawFn) => {
-        return () => drawFn();
-    };
-
     if (rsiChartCanvas) {
-        rsiChartCanvas.addEventListener('mousemove', createChartMouseHandler(rsiChartCanvas, rsiHistory, drawRsiChart));
-        rsiChartCanvas.addEventListener('mouseout', createChartMouseOutHandler(drawRsiChart));
+        rsiChartCanvas.addEventListener('mousemove', (e) => {
+            if (rsiHistory.length === 0) return;
+            const rect = rsiChartCanvas.getBoundingClientRect();
+            rsiChartMousePosition = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            drawRsiChart();
+        });
+        rsiChartCanvas.addEventListener('mouseout', () => {
+            rsiChartMousePosition = null;
+            drawRsiChart();
+        });
     }
 
     if (rsiDailyChartCanvas) {
-        rsiDailyChartCanvas.addEventListener('mousemove', createChartMouseHandler(rsiDailyChartCanvas, rsiDailyHistory, drawRsiDailyChart));
-        rsiDailyChartCanvas.addEventListener('mouseout', createChartMouseOutHandler(drawRsiDailyChart));
+        rsiDailyChartCanvas.addEventListener('mousemove', (e) => {
+            if (rsiDailyHistory.length === 0) return;
+            const rect = rsiDailyChartCanvas.getBoundingClientRect();
+            rsiDailyChartMousePosition = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            drawRsiDailyChart();
+        });
+        rsiDailyChartCanvas.addEventListener('mouseout', () => {
+            rsiDailyChartMousePosition = null;
+            drawRsiDailyChart();
+        });
     }
 });
