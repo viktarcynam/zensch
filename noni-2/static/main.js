@@ -215,9 +215,9 @@ const drawRsiDailyChart = (mousePosition = null) => {
             ctx.setLineDash([]);
 
             // Prepare tooltip text
-            const date = new Date(dataPoint.datetime);
-            const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
-            const text = `RSI: ${dataPoint.value.toFixed(2)} (${dateString})`;
+            // const date = new Date(dataPoint.datetime);
+            // const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
+            const text = `RSI: ${dataPoint.value.toFixed(2)}`;
 
             // Draw tooltip
             ctx.font = '11px Arial';
@@ -304,9 +304,9 @@ const drawRsiChart = (mousePosition = null) => {
             ctx.setLineDash([]);
 
             // Prepare tooltip text
-            const date = new Date(dataPoint.datetime);
-            const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-            const text = `RSI: ${dataPoint.value.toFixed(2)} (${dateString})`;
+            // const date = new Date(dataPoint.datetime);
+            // const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const text = `RSI: ${dataPoint.value.toFixed(2)}`;
 
             // Draw tooltip
             ctx.font = '11px Arial';
