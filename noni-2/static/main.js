@@ -228,18 +228,24 @@ const drawRsiDailyChart = (mousePosition) => {
             ctx.font = '11px Arial';
             const textWidth = ctx.measureText(text).width;
             const padding = 5;
-            let tooltipX = xPos + padding * 2;
-            let tooltipY = 15; // Fixed Y position at the top of the canvas
+            const boxWidth = textWidth + (padding * 2);
+            let tooltipX;
 
-            // Adjust position to keep tooltip within canvas bounds
-            if (tooltipX + textWidth + padding > canvas.width) {
-                tooltipX = xPos - textWidth - (padding * 2);
+            // Smartly position the tooltip to avoid going off-screen
+            if (xPos + padding + boxWidth > canvas.width) {
+                // Not enough space on the right, draw on the left
+                tooltipX = xPos - boxWidth - padding;
+            } else {
+                // Enough space, draw on the right
+                tooltipX = xPos + padding;
             }
 
+            let tooltipY = 15; // Fixed Y position at the top of the canvas
+
             ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
-            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
+            ctx.fillRect(tooltipX, tooltipY - 12, boxWidth, 18);
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(text, tooltipX, tooltipY);
+            ctx.fillText(text, tooltipX + padding, tooltipY);
         }
     }
 };
@@ -317,18 +323,24 @@ const drawRsiChart = (mousePosition) => {
             ctx.font = '11px Arial';
             const textWidth = ctx.measureText(text).width;
             const padding = 5;
-            let tooltipX = xPos + padding * 2;
-            let tooltipY = 15; // Fixed Y position at the top of the canvas
+            const boxWidth = textWidth + (padding * 2);
+            let tooltipX;
 
-            // Adjust position to keep tooltip within canvas bounds
-            if (tooltipX + textWidth + padding > canvas.width) {
-                tooltipX = xPos - textWidth - (padding * 2);
+            // Smartly position the tooltip to avoid going off-screen
+            if (xPos + padding + boxWidth > canvas.width) {
+                // Not enough space on the right, draw on the left
+                tooltipX = xPos - boxWidth - padding;
+            } else {
+                // Enough space, draw on the right
+                tooltipX = xPos + padding;
             }
 
+            let tooltipY = 15; // Fixed Y position at the top of the canvas
+
             ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
-            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
+            ctx.fillRect(tooltipX, tooltipY - 12, boxWidth, 18);
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(text, tooltipX, tooltipY);
+            ctx.fillText(text, tooltipX + padding, tooltipY);
         }
     }
 };
