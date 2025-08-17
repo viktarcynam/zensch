@@ -197,42 +197,11 @@ const drawRsiDailyChart = (mousePosition = null) => {
         const dataPoint = rsiDailyHistory[dataIndex];
 
         if (dataPoint) {
-            const xPos = mapX(dataIndex);
-
-            // Draw vertical guideline
+            // --- Red Circle Test ---
             ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.setLineDash([3, 3]);
-            ctx.moveTo(xPos, 0);
-            ctx.lineTo(xPos, canvas.height);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Prepare tooltip text
-            // const date = new Date(dataPoint.datetime);
-            // const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
-            // const text = `RSI: ${dataPoint.value.toFixed(2)} (${dateString})`;
-            const text = "Test Tooltip: Daily"; // Hardcoded for debugging
-
-            // Draw tooltip
-            ctx.font = '11px Arial';
-            const textWidth = ctx.measureText(text).width;
-            const padding = 5;
-            let tooltipX = xPos + padding * 2;
-            let tooltipY = mousePosition.y - 20;
-
-            // Adjust position to keep tooltip within canvas bounds
-            if (tooltipX + textWidth + padding > canvas.width) {
-                tooltipX = xPos - textWidth - (padding * 2);
-            }
-            if (tooltipY < 0) {
-                tooltipY = mousePosition.y + 10;
-            }
-
-            ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
-            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(text, tooltipX, tooltipY);
+            ctx.arc(mousePosition.x, mousePosition.y, 5, 0, 2 * Math.PI, false);
+            ctx.fillStyle = 'red';
+            ctx.fill();
         }
     }
     };
@@ -281,42 +250,11 @@ const drawRsiChart = (mousePosition = null) => {
         const dataPoint = rsiHistory[dataIndex];
 
         if (dataPoint) {
-            const xPos = mapX(dataIndex);
-
-            // Draw vertical guideline
+            // --- Red Circle Test ---
             ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.setLineDash([3, 3]);
-            ctx.moveTo(xPos, 0);
-            ctx.lineTo(xPos, canvas.height);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Prepare tooltip text
-            // const date = new Date(dataPoint.datetime);
-            // const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-            // const text = `RSI: ${dataPoint.value.toFixed(2)} (${dateString})`;
-            const text = "Test Tooltip: 30m"; // Hardcoded for debugging
-
-            // Draw tooltip
-            ctx.font = '11px Arial';
-            const textWidth = ctx.measureText(text).width;
-            const padding = 5;
-            let tooltipX = xPos + padding * 2;
-            let tooltipY = mousePosition.y - 20;
-
-            // Adjust position to keep tooltip within canvas bounds
-            if (tooltipX + textWidth + padding > canvas.width) {
-                tooltipX = xPos - textWidth - (padding * 2);
-            }
-            if (tooltipY < 0) {
-                tooltipY = mousePosition.y + 10;
-            }
-
-            ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
-            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(text, tooltipX, tooltipY);
+            ctx.arc(mousePosition.x, mousePosition.y, 5, 0, 2 * Math.PI, false);
+            ctx.fillStyle = 'red';
+            ctx.fill();
         }
     }
     };
