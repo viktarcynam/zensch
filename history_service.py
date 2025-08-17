@@ -1,4 +1,5 @@
 import logging
+import json
 from datetime import datetime, timedelta
 
 # Configure logging
@@ -82,6 +83,23 @@ class HistoryService:
                  return {"success": False, "error": f"Failed to retrieve any historical data for {symbol}."}
 
             logger.info(f"Successfully fetched historical data for {symbol}.")
+
+            # --- DEBUG: Save to file ---
+            try:
+                with open('debug_history_output.json', 'w') as f:
+                    debug_data = {
+                        "comment": "This file contains the raw price history responses from the Schwab API for debugging.",
+                        "retrieved_at": datetime.now().isoformat(),
+                        "symbol": symbol,
+                        "data_30m": history_30m_json,
+                        "data_daily": history_daily_json
+                    }
+                    json.dump(debug_data, f, indent=2)
+                logger.info(f"DEBUG: Saved history for {symbol} to debug_history_output.json")
+            except Exception as e:
+                logger.error(f"DEBUG: Failed to write history to file: {e}")
+            # --- END DEBUG ---
+
             return {
                 "success": True,
                 "data": {

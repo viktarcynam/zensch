@@ -154,42 +154,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 const drawRsiDailyChart = (mousePosition = null) => {
-        const canvas = document.getElementById('rsi-daily-chart');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+    const canvas = document.getElementById('rsi-daily-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (rsiDailyHistory.length < 2) return;
+    if (rsiDailyHistory.length < 2) {
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'grey';
+        ctx.textAlign = 'center';
+        ctx.fillText('No Daily History Available', canvas.width / 2, canvas.height / 2);
+        return;
+    }
 
-        const mapY = (val) => canvas.height - (val / 100) * canvas.height;
-        const mapX = (index) => (index / (rsiDailyHistory.length - 1)) * canvas.width;
+    const mapY = (val) => canvas.height - (val / 100) * canvas.height;
+    const mapX = (index) => (index / (rsiDailyHistory.length - 1)) * canvas.width;
 
-        // Draw reference lines at 30 and 70
-        [30, 70].forEach(level => {
-            const y = mapY(level);
-            ctx.beginPath();
-        ctx.strokeStyle = '#8B4513';
-            ctx.setLineDash([2, 2]);
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
-            ctx.stroke();
-        });
-        ctx.setLineDash([]);
-
-        // Draw RSI line
+    // Draw reference lines at 30 and 70
+    [30, 70].forEach(level => {
+        const y = mapY(level);
         ctx.beginPath();
-        ctx.strokeStyle = '#FFD700'; // Gold color for daily RSI
-        ctx.lineWidth = 1.5;
-        rsiDailyHistory.forEach((point, index) => {
-            const x = mapX(index);
-        const y = mapY(point.value);
-            if (index === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        });
+        ctx.strokeStyle = '#8B4513';
+        ctx.setLineDash([2, 2]);
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
         ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // Draw RSI line
+    ctx.beginPath();
+    ctx.strokeStyle = '#FFD700'; // Gold color for daily RSI
+    ctx.lineWidth = 1.5;
+    rsiDailyHistory.forEach((point, index) => {
+        const x = mapX(index);
+        const y = mapY(point.value);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
 
     // --- Tooltip and Guideline Logic ---
     if (mousePosition && rsiDailyHistory.length > 1) {
@@ -197,52 +203,88 @@ const drawRsiDailyChart = (mousePosition = null) => {
         const dataPoint = rsiDailyHistory[dataIndex];
 
         if (dataPoint) {
-            // --- Red Circle Test ---
+            const xPos = mapX(dataIndex);
+
+            // Draw vertical guideline
             ctx.beginPath();
-            ctx.arc(mousePosition.x, mousePosition.y, 5, 0, 2 * Math.PI, false);
-            ctx.fillStyle = 'red';
-            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.setLineDash([3, 3]);
+            ctx.moveTo(xPos, 0);
+            ctx.lineTo(xPos, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Prepare tooltip text
+            const date = new Date(dataPoint.datetime);
+            const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
+            const text = `RSI: ${dataPoint.value.toFixed(2)} (${dateString})`;
+
+            // Draw tooltip
+            ctx.font = '11px Arial';
+            const textWidth = ctx.measureText(text).width;
+            const padding = 5;
+            let tooltipX = xPos + padding * 2;
+            let tooltipY = mousePosition.y - 20;
+
+            // Adjust position to keep tooltip within canvas bounds
+            if (tooltipX + textWidth + padding > canvas.width) {
+                tooltipX = xPos - textWidth - (padding * 2);
+            }
+            if (tooltipY < 0) {
+                tooltipY = mousePosition.y + 10;
+            }
+
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
+            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(text, tooltipX, tooltipY);
         }
     }
-    };
+};
 
 const drawRsiChart = (mousePosition = null) => {
-        const canvas = document.getElementById('rsi-chart');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+    const canvas = document.getElementById('rsi-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (rsiHistory.length < 2) return;
+    if (rsiHistory.length < 2) {
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'grey';
+        ctx.textAlign = 'center';
+        ctx.fillText('No 30m History Available', canvas.width / 2, canvas.height / 2);
+        return;
+    }
 
-        const mapY = (val) => canvas.height - (val / 100) * canvas.height;
-        const mapX = (index) => (index / (rsiHistory.length - 1)) * canvas.width;
+    const mapY = (val) => canvas.height - (val / 100) * canvas.height;
+    const mapX = (index) => (index / (rsiHistory.length - 1)) * canvas.width;
 
-        // Draw reference lines at 30 and 70
-        [30, 70].forEach(level => {
-            const y = mapY(level);
-            ctx.beginPath();
-        ctx.strokeStyle = '#8B4513';
-            ctx.setLineDash([2, 2]);
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
-            ctx.stroke();
-        });
-        ctx.setLineDash([]);
-
-        // Draw RSI line
+    // Draw reference lines at 30 and 70
+    [30, 70].forEach(level => {
+        const y = mapY(level);
         ctx.beginPath();
-        ctx.strokeStyle = '#d8a0ff'; // Purple color
-        ctx.lineWidth = 1.5;
-        rsiHistory.forEach((point, index) => {
-            const x = mapX(index);
-        const y = mapY(point.value);
-            if (index === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        });
+        ctx.strokeStyle = '#8B4513';
+        ctx.setLineDash([2, 2]);
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
         ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // Draw RSI line
+    ctx.beginPath();
+    ctx.strokeStyle = '#d8a0ff'; // Purple color
+    ctx.lineWidth = 1.5;
+    rsiHistory.forEach((point, index) => {
+        const x = mapX(index);
+        const y = mapY(point.value);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
 
     // --- Tooltip and Guideline Logic ---
     if (mousePosition && rsiHistory.length > 1) {
@@ -250,14 +292,44 @@ const drawRsiChart = (mousePosition = null) => {
         const dataPoint = rsiHistory[dataIndex];
 
         if (dataPoint) {
-            // --- Red Circle Test ---
+            const xPos = mapX(dataIndex);
+
+            // Draw vertical guideline
             ctx.beginPath();
-            ctx.arc(mousePosition.x, mousePosition.y, 5, 0, 2 * Math.PI, false);
-            ctx.fillStyle = 'red';
-            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.setLineDash([3, 3]);
+            ctx.moveTo(xPos, 0);
+            ctx.lineTo(xPos, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Prepare tooltip text
+            const date = new Date(dataPoint.datetime);
+            const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const text = `RSI: ${dataPoint.value.toFixed(2)} (${dateString})`;
+
+            // Draw tooltip
+            ctx.font = '11px Arial';
+            const textWidth = ctx.measureText(text).width;
+            const padding = 5;
+            let tooltipX = xPos + padding * 2;
+            let tooltipY = mousePosition.y - 20;
+
+            // Adjust position to keep tooltip within canvas bounds
+            if (tooltipX + textWidth + padding > canvas.width) {
+                tooltipX = xPos - textWidth - (padding * 2);
+            }
+            if (tooltipY < 0) {
+                tooltipY = mousePosition.y + 10;
+            }
+
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
+            ctx.fillRect(tooltipX - padding, tooltipY - 12, textWidth + (padding * 2), 18);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(text, tooltipX, tooltipY);
         }
     }
-    };
+};
 
 
     const drawAccumChart = () => {
@@ -1316,7 +1388,7 @@ const drawRsiChart = (mousePosition = null) => {
 
     const createChartMouseHandler = (canvas, dataHistory, drawFn) => {
         return (e) => {
-            // if (dataHistory.length === 0) return; // Temporarily removed for debugging
+            if (dataHistory.length === 0) return;
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
