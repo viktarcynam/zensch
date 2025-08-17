@@ -221,31 +221,33 @@ const drawRsiDailyChart = (mousePosition) => {
 
             // Prepare tooltip text
             const date = new Date(dataPoint.datetime);
-            const dateString = `${date.getMonth() + 1}/${date.getDate()}`;
-            const text = `${dateString} - RSI: ${dataPoint.value.toFixed(2)}`;
+            const line1 = `RSI: ${dataPoint.value.toFixed(2)}`;
+            const line2 = `${date.getMonth() + 1}/${date.getDate()}`;
 
             // Draw tooltip
             ctx.font = '11px Arial';
-            const textWidth = ctx.measureText(text).width;
+            const textWidth1 = ctx.measureText(line1).width;
+            const textWidth2 = ctx.measureText(line2).width;
+            const maxWidth = Math.max(textWidth1, textWidth2);
             const padding = 5;
-            const boxWidth = textWidth + (padding * 2);
+            const boxWidth = maxWidth + (padding * 2);
+            const boxHeight = 30; // Height for two lines
             let tooltipX;
 
             // Smartly position the tooltip to avoid going off-screen
             if (xPos + padding + boxWidth > canvas.width) {
-                // Not enough space on the right, draw on the left
                 tooltipX = xPos - boxWidth - padding;
             } else {
-                // Enough space, draw on the right
                 tooltipX = xPos + padding;
             }
 
-            let tooltipY = 15; // Fixed Y position at the top of the canvas
+            let tooltipY = 15; // Fixed Y position at the top
 
             ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
-            ctx.fillRect(tooltipX, tooltipY - 12, boxWidth, 18);
+            ctx.fillRect(tooltipX, tooltipY - 12, boxWidth, boxHeight);
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(text, tooltipX + padding, tooltipY);
+            ctx.fillText(line1, tooltipX + padding, tooltipY);
+            ctx.fillText(line2, tooltipX + padding, tooltipY + 12);
         }
     }
 };
@@ -316,31 +318,33 @@ const drawRsiChart = (mousePosition) => {
 
             // Prepare tooltip text
             const date = new Date(dataPoint.datetime);
-            const dateString = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-            const text = `${dateString} - RSI: ${dataPoint.value.toFixed(2)}`;
+            const line1 = `RSI: ${dataPoint.value.toFixed(2)}`;
+            const line2 = date.toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
             // Draw tooltip
             ctx.font = '11px Arial';
-            const textWidth = ctx.measureText(text).width;
+            const textWidth1 = ctx.measureText(line1).width;
+            const textWidth2 = ctx.measureText(line2).width;
+            const maxWidth = Math.max(textWidth1, textWidth2);
             const padding = 5;
-            const boxWidth = textWidth + (padding * 2);
+            const boxWidth = maxWidth + (padding * 2);
+            const boxHeight = 30; // Height for two lines
             let tooltipX;
 
             // Smartly position the tooltip to avoid going off-screen
             if (xPos + padding + boxWidth > canvas.width) {
-                // Not enough space on the right, draw on the left
                 tooltipX = xPos - boxWidth - padding;
             } else {
-                // Enough space, draw on the right
                 tooltipX = xPos + padding;
             }
 
-            let tooltipY = 15; // Fixed Y position at the top of the canvas
+            let tooltipY = 15; // Fixed Y position at the top
 
             ctx.fillStyle = 'rgba(40, 40, 40, 0.85)';
-            ctx.fillRect(tooltipX, tooltipY - 12, boxWidth, 18);
+            ctx.fillRect(tooltipX, tooltipY - 12, boxWidth, boxHeight);
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(text, tooltipX + padding, tooltipY);
+            ctx.fillText(line1, tooltipX + padding, tooltipY);
+            ctx.fillText(line2, tooltipX + padding, tooltipY + 12);
         }
     }
 };
