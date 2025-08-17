@@ -522,8 +522,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // --- MOCK DATA ACTIVATION ---
-            const responsePromise = generateMockData();
-            // const responsePromise = fetch(`/api/options/${symbol}/${strike}/${expiry}`).then(res => res.json());
+            // const responsePromise = generateMockData();
+            const responsePromise = fetch(`/api/options/${symbol}/${strike}/${expiry}`).then(res => res.json());
             // --- END MOCK DATA ACTIVATION ---
 
             const data = await responsePromise;
