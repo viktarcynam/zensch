@@ -127,5 +127,10 @@
     </div>
 
     <script defer src="{{ url_for('static', filename='main.js') }}?v=8.3"></script>
+
+    <div id="debug-chart-container" style="margin-top: 20px; padding: 10px; border: 1px solid #444; background-color: #1a1a1a;">
+        <h3 style="color: #eee; text-align: center;">Debug Chart</h3>
+        <canvas id="debug-chart" width="800" height="200" style="background-color: #222;"></canvas>
+    </div>
 </body>
 </html>

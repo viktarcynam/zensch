@@ -1409,4 +1409,89 @@ const drawRsiChart = (mousePosition = null) => {
         rsiDailyChartCanvas.addEventListener('mousemove', createChartMouseHandler(rsiDailyChartCanvas, rsiDailyHistory, drawRsiDailyChart));
         rsiDailyChartCanvas.addEventListener('mouseout', createChartMouseOutHandler(drawRsiDailyChart));
     }
+
+    // --- DEBUG CHART LOGIC ---
+    const drawDebugChart = (mousePosition = null) => {
+        const canvas = document.getElementById('debug-chart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        const data = [
+            { time: '2023-01-01T10:00:00Z', price: 150.5 },
+            { time: '2023-01-01T10:05:00Z', price: 151.2 },
+            { time: '2023-01-01T10:10:00Z', price: 150.8 },
+            { time: '2023-01-01T10:15:00Z', price: 152.1 },
+            { time: '2023-01-01T10:20:00Z', price: 151.9 },
+            { time: '2023-01-01T10:25:00Z', price: 152.5 },
+            { time: '2023-01-01T10:30:00Z', price: 153.0 }
+        ];
+
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const minPrice = Math.min(...data.map(p => p.price));
+        const maxPrice = Math.max(...data.map(p => p.price));
+        const priceRange = maxPrice - minPrice;
+
+        const mapX = (index) => (index / (data.length - 1)) * canvas.width;
+        const mapY = (price) => canvas.height - ((price - minPrice) / priceRange) * canvas.height;
+
+        // Draw line
+        ctx.beginPath();
+        ctx.strokeStyle = '#00FF00'; // Bright green
+        ctx.lineWidth = 2;
+        data.forEach((point, index) => {
+            const x = mapX(index);
+            const y = mapY(point.price);
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Tooltip logic
+        if (mousePosition) {
+            const dataIndex = Math.round((mousePosition.x / canvas.width) * (data.length - 1));
+            const dataPoint = data[dataIndex];
+            if (dataPoint) {
+                const xPos = mapX(dataIndex);
+
+                // Guideline
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 255, 0, 0.7)';
+                ctx.setLineDash([5, 5]);
+                ctx.moveTo(xPos, 0);
+                ctx.lineTo(xPos, canvas.height);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Tooltip text
+                const text = `Price: ${dataPoint.price.toFixed(2)} @ ${new Date(dataPoint.time).toLocaleTimeString()}`;
+                ctx.font = '12px Arial';
+                const textWidth = ctx.measureText(text).width;
+                const padding = 6;
+                let tooltipX = xPos + padding;
+                if (tooltipX + textWidth + padding > canvas.width) {
+                    tooltipX = xPos - textWidth - padding;
+                }
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(tooltipX - padding, mousePosition.y - 20, textWidth + (padding * 2), 24);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText(text, tooltipX, mousePosition.y - 5);
+            }
+        }
+    };
+
+    const debugCanvas = document.getElementById('debug-chart');
+    if (debugCanvas) {
+        drawDebugChart(); // Initial draw
+        debugCanvas.addEventListener('mousemove', (e) => {
+            const rect = debugCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            drawDebugChart({ x, y });
+        });
+        debugCanvas.addEventListener('mouseout', () => drawDebugChart());
+    }
 });
