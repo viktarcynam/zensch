@@ -680,6 +680,7 @@ if __name__ == "__main__":
     parser.add_argument("--emergencyclosetime", type=int, help="Override rule: max seconds for emergency close.")
 
     args = parser.parse_args()
+    args.symbol = args.symbol.upper()
 
     print("=============================================")
     print("         noni1aj - Trading Bot         ")
