@@ -12,4 +12,4 @@ closepricefish: 0.03
 closepricemethod: 'seq'
 closingmaxtime: 60
 emergencyclosetime: 120
-dryrun: True
+dry-run: True
