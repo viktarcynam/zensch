@@ -14,7 +14,7 @@ def load_and_validate_rules(rules_file_path, cli_overrides):
     required_rules = [
         'spread', 'waitbidask', 'prefercp', 'preferBS', 'openingmaxtime', 'maxflowretry',
         'openretrytime', 'openpricefish', 'openpricemethod', 'closeretrytime',
-        'closepricefish', 'closepricemethod', 'closingmaxtime', 'emergencyclosetime'
+        'closepricefish', 'closepricemethod', 'closingmaxtime', 'emergencyclosetime', 'dry-run'
     ]
     try:
         with open(rules_file_path, 'r') as f:
