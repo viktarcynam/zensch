@@ -666,16 +666,16 @@ if __name__ == "__main__":
     # Rule overrides
     parser.add_argument("--spread", type=float, help="Override rule: minimum bid-ask spread.")
     parser.add_argument("--waitbidask", type=int, help="Override rule: seconds to wait for a valid spread.")
-    parser.add_argument("--prefer-cp", choices=['C', 'P'], help="Override rule: prefer Call or Put.")
-    parser.add_argument("--prefer-bs", choices=['B', 'S'], help="Override rule: prefer Buy or Sell for opening.")
+    parser.add_argument("--prefer-cp", type=str, help="Override rule: prefer Call or Put (C/P).")
+    parser.add_argument("--prefer-bs", type=str, help="Override rule: prefer Buy or Sell for opening (B/S).")
     parser.add_argument("--openingmaxtime", type=int, help="Override rule: max seconds to fill opening order.")
     parser.add_argument("--maxflowretry", type=int, help="Override rule: max number of times to restart flow.")
     parser.add_argument("--openretrytime", type=int, help="Override rule: seconds before replacing open order.")
     parser.add_argument("--openpricefish", type=float, help="Override rule: amount to adjust open price by.")
-    parser.add_argument("--openpricemethod", choices=['seq', 'random'], help="Override rule: method for open price adjustment.")
+    parser.add_argument("--openpricemethod", type=str, help="Override rule: method for open price adjustment (seq/random).")
     parser.add_argument("--closeretrytime", type=int, help="Override rule: seconds before replacing close order.")
     parser.add_argument("--closepricefish", type=float, help="Override rule: amount to adjust close price by.")
-    parser.add_argument("--closepricemethod", choices=['seq', 'random'], help="Override rule: method for close price adjustment.")
+    parser.add_argument("--closepricemethod", type=str, help="Override rule: method for close price adjustment (seq/random).")
     parser.add_argument("--closingmaxtime", type=int, help="Override rule: max seconds to fill closing order.")
     parser.add_argument("--emergencyclosetime", type=int, help="Override rule: max seconds for emergency close.")
 
@@ -688,6 +688,16 @@ if __name__ == "__main__":
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] - Starting bot for symbol: {args.symbol}")
 
     rules_file = args.rules_file or f"{args.symbol.lower()}-rules.yml"
+
+    # Normalize case-sensitive CLI arguments before creating overrides
+    if args.prefer_cp:
+        args.prefer_cp = args.prefer_cp.upper()
+    if args.prefer_bs:
+        args.prefer_bs = args.prefer_bs.upper()
+    if args.openpricemethod:
+        args.openpricemethod = args.openpricemethod.lower()
+    if args.closepricemethod:
+        args.closepricemethod = args.closepricemethod.lower()
 
     # Map argparse dest names to rule keys and collect overrides
     arg_to_rule_map = {
