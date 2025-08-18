@@ -658,10 +658,26 @@ if __name__ == "__main__":
     parser.add_argument("--strike", type=float, help="The strike price. Overrides rules file.")
     parser.add_argument("--expiry", help="The expiry date (YYYY-MM-DD). Overrides rules file.")
 
-    # Run modes
-    run_mode_group = parser.add_mutually_exclusive_group()
-    run_mode_group.add_argument("--dry-run", action="store_true", help="Simulate trading with random outcomes.")
-    run_mode_group.add_argument("--external-run", action="store_true", help="Suggest trades for manual execution.")
+def str_to_bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="noni1aj - Automated Options Trading Bot")
+    parser.add_argument("--symbol", required=True, help="The stock symbol to trade.")
+    parser.add_argument("--rules-file", help="Path to the YAML rules file. Defaults to <symbol>-rules.yml.")
+    parser.add_argument("--strike", type=float, help="The strike price. Overrides rules file.")
+    parser.add_argument("--expiry", help="The expiry date (YYYY-MM-DD). Overrides rules file.")
+
+    # Run modes and overrides
+    parser.add_argument("--dry-run", type=str_to_bool, nargs='?', const=True, default=None, help="Override dry-run mode (True/False).")
+    parser.add_argument("--external-run", action="store_true", help="Suggest trades for manual execution.")
 
     # Rule overrides
     parser.add_argument("--spread", type=float, help="Override rule: minimum bid-ask spread.")
@@ -703,6 +719,7 @@ if __name__ == "__main__":
     arg_to_rule_map = {
         'prefer_cp': 'prefercp',
         'prefer_bs': 'preferBS',
+        'dry_run': 'dry-run', # Add dry_run to the map
         'spread': 'spread', 'waitbidask': 'waitbidask', 'openingmaxtime': 'openingmaxtime',
         'maxflowretry': 'maxflowretry', 'openretrytime': 'openretrytime',
         'openpricefish': 'openpricefish', 'openpricemethod': 'openpricemethod',
@@ -719,15 +736,12 @@ if __name__ == "__main__":
     rules = load_and_validate_rules(rules_file, cli_overrides)
 
     # Determine run mode with correct precedence: CLI flag > YAML setting
-    if args.dry_run:
-        rules['run_mode'] = 'dry_run'
-        print("\n*** DRY RUN MODE ENABLED (from CLI) - Simulating trades with random outcomes. ***\n")
-    elif args.external_run:
+    if args.external_run:
         rules['run_mode'] = 'external_run'
         print("\n*** EXTERNAL RUN MODE ENABLED - Bot will suggest trades for manual execution. ***\n")
-    elif rules.get('dryrun', False): # Check for dryrun from the file
+    elif rules.get('dry-run', False): # Use the final, overridden value
         rules['run_mode'] = 'dry_run'
-        print("\n*** DRY RUN MODE ENABLED (from rules file) - Simulating trades with random outcomes. ***\n")
+        print("\n*** DRY RUN MODE ENABLED - Simulating trades with random outcomes. ***\n")
     else:
         rules['run_mode'] = 'live'
 
