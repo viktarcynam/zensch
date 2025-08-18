@@ -1,0 +1,15 @@
+spread: 0.03
+waitbidask: 60
+prefercp: 'P'
+preferBS: 'B'
+openingmaxtime: 60
+maxflowretry: 3
+openretrytime: 4
+openpricefish: 0.03
+openpricemethod: 'seq'
+closeretrytime: 60
+closepricefish: 0.03
+closepricemethod: 'seq'
+closingmaxtime: 60
+emergencyclosetime: 120
+dry-run: True
