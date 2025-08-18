@@ -30,9 +30,13 @@ def load_and_validate_rules(rules_file_path, cli_overrides):
         print(f"Error parsing YAML file '{rules_file_path}': {e}. Exiting.")
         sys.exit(1)
 
-    # Apply CLI overrides
     if cli_overrides:
-        rules.update(cli_overrides)
+        # Make a copy so we don't modify the original dict from vars(args)
+        overrides = cli_overrides.copy()
+        # Special handling for dry-run key
+        if 'dry_run' in overrides:
+            overrides['dry-run'] = overrides.pop('dry_run')
+        rules.update(overrides)
         print("Applied CLI overrides to rules.")
 
     missing_rules = [rule for rule in required_rules if rule not in rules]
@@ -42,14 +46,13 @@ def load_and_validate_rules(rules_file_path, cli_overrides):
             print(f"  - {rule}")
         sys.exit(1)
 
-    # Perform validation
     if 'prefercp' in rules:
-        rules['prefercp'] = rules['prefercp'].upper()
+        rules['prefercp'] = str(rules['prefercp']).upper()
         if rules['prefercp'] not in ['C', 'P']:
             print(f"Error: Invalid 'prefercp' value '{rules['prefercp']}'. Must be 'C' or 'P'. Exiting.")
             sys.exit(1)
     if 'preferBS' in rules:
-        rules['preferBS'] = rules['preferBS'].upper()
+        rules['preferBS'] = str(rules['preferBS']).upper()
         if rules['preferBS'] not in ['B', 'S']:
             print(f"Error: Invalid 'preferBS' value '{rules['preferBS']}'. Must be 'B' or 'S'. Exiting.")
             sys.exit(1)
@@ -102,8 +105,6 @@ def find_matching_order(client, account_hash, rules, option_type):
                     if (instrument.get('assetType') == 'OPTION' and
                         instrument.get('underlyingSymbol') == rules['symbol'] and
                         instrument.get('putCall') == option_type):
-
-                        # More precise check using description parsing if needed, but this is often enough
                         from trading_utils import parse_instrument_description
                         desc_details = parse_instrument_description(instrument.get('description'))
                         if desc_details and abs(desc_details['strike'] - rules['strike']) < 0.001 and desc_details['expiry'] == rules['expiry']:
@@ -111,6 +112,41 @@ def find_matching_order(client, account_hash, rules, option_type):
                             return order
     print(f"[{rules.get('run_mode').upper()}] No matching order found yet.")
     return None
+
+def print_bold(text):
+    """Prints text in bold using ANSI escape codes."""
+    print(f"\033[1m{text}\033[0m")
+
+def print_trade_summary(open_order, close_order):
+    """Prints a summary of the completed trade."""
+    try:
+        open_leg = open_order['orderActivityCollection'][0]['executionLegs'][0]
+        close_leg = close_order['orderActivityCollection'][0]['executionLegs'][0]
+        entry_price = open_leg['price']
+        exit_price = close_leg['price']
+        quantity = open_leg['quantity']
+        side = open_order['orderLegCollection'][0]['instruction']
+        p_l_per_contract = exit_price - entry_price if side == 'BUY_TO_OPEN' else entry_price - exit_price
+        total_p_l = p_l_per_contract * quantity * 100
+        print("\n" + "="*30)
+        print_bold("Trade Summary")
+        print(f"  Entry Price: {entry_price:.2f}")
+        print(f"  Exit Price:  {exit_price:.2f}")
+        print(f"  P/L:         ${total_p_l:.2f}")
+        print("="*30)
+    except (KeyError, IndexError, TypeError) as e:
+        print("\nCould not generate trade summary due to unexpected order format.")
+        print(f"Error: {e}")
+
+def str_to_bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def handle_opening_state(client, account_hash, rules, selected_option):
     """
@@ -127,37 +163,30 @@ def handle_opening_state(client, account_hash, rules, selected_option):
 
     run_mode = rules.get('run_mode')
 
-    # --- External Run Mode ---
     if run_mode == 'external_run':
         print_bold(f"\n[EXTERNAL] Please place the following order manually:")
         print_bold(f"  ACTION: {side} 1 {selected_option['type']} {rules['symbol']} @ STRIKE {rules['strike']} EXP {rules['expiry']}")
         print_bold(f"  PRICE:  LIMIT @ {initial_price:.2f}")
-
         opening_start_time = time.time()
         last_suggestion_time = time.time()
         price_generator = create_price_generator(initial_price, rules['openpricefish'], rules['openpricemethod'], side)
-
         while time.time() - opening_start_time < rules['openingmaxtime']:
             external_order = find_matching_order(client, account_hash, rules, selected_option['type'])
             if external_order:
                 if external_order.get('status') == 'FILLED':
                     print("[EXTERNAL] Detected externally placed order has been FILLED.")
                     return {'status': 'FILLED', 'order': external_order}
-                else: # It's working, so monitor it
+                else:
                     print(f"[EXTERNAL] Detected working order {external_order.get('orderId')}. Monitoring for fill.")
-                    # Let this inner loop run for the extended retry time
                     if time.time() - last_suggestion_time > (rules['openretrytime'] * 10):
                         new_price = next(price_generator)
                         print_bold(f"\n[EXTERNAL] Order has not filled. It is recommended to replace it with a new price: {new_price:.2f}")
-                        last_suggestion_time = time.time() # Reset timer after suggestion
-
+                        last_suggestion_time = time.time()
             print(f"  [EXTERNAL] Waiting for user to place/fill order...", end='\r')
-            time.sleep(10) # Poll less frequently in external mode
-
+            time.sleep(10)
         print("\n[EXTERNAL] Opening state timed out.")
         return {'status': 'TIMEOUT'}
 
-    # --- Live and Dry Run Modes ---
     action_msg = f"[OPENING] Placing initial order: {side} 1 {selected_option['type']} @ {initial_price:.2f}"
     print(action_msg)
     if run_mode == 'live':
@@ -195,8 +224,7 @@ def handle_opening_state(client, account_hash, rules, selected_option):
             print(f"\n[DRY RUN] [OPENING] Simulating a FILLED order.")
             fake_filled_order = {
                 'orderLegCollection': [{'instruction': side, 'quantity': 1, 'instrument': {'putCall': selected_option['type']}}],
-                'orderActivityCollection': [{'executionLegs': [{'price': current_price, 'quantity': 1}]}]
-            }
+                'orderActivityCollection': [{'executionLegs': [{'price': current_price, 'quantity': 1}]}]}
             return {'status': 'FILLED', 'order': fake_filled_order}
 
         if time.time() - last_replacement_time > rules['openretrytime']:
@@ -206,16 +234,21 @@ def handle_opening_state(client, account_hash, rules, selected_option):
                 replace_msg = f"[OPENING] Replacing order. New details: {side} 1 {selected_option['type']} @ {current_price:.2f}"
                 print(f"\n{replace_msg}")
                 if run_mode == 'live':
-                    replace_response = client.replace_option_order(
-                        account_id=account_hash, order_id=current_order_id, symbol=rules['symbol'],
-                        option_type=selected_option['type'], expiration_date=rules['expiry'],
-                        strike_price=rules['strike'], quantity=1, side=side, order_type="LIMIT", price=current_price)
-                    if replace_response.get('success'):
-                        new_order_id = replace_response.get('data', {}).get('new_order_id')
-                        print(f"[OPENING] Replacement successful. New Order ID: {new_order_id}")
-                        current_order_id = new_order_id
+                    live_order_details = client.get_option_order_details(account_id=account_hash, order_id=current_order_id)
+                    if live_order_details.get('success'):
+                        original_instruction = live_order_details['data']['orderLegCollection'][0]['instruction']
+                        replace_response = client.replace_option_order(
+                            account_id=account_hash, order_id=current_order_id, symbol=rules['symbol'],
+                            option_type=selected_option['type'], expiration_date=rules['expiry'],
+                            strike_price=rules['strike'], quantity=1, side=original_instruction, order_type="LIMIT", price=current_price)
+                        if replace_response.get('success'):
+                            new_order_id = replace_response.get('data', {}).get('new_order_id')
+                            print(f"[OPENING] Replacement successful. New Order ID: {new_order_id}")
+                            current_order_id = new_order_id
+                        else:
+                            print(f"[OPENING] Error replacing order: {replace_response.get('error')}")
                     else:
-                        print(f"[OPENING] Error replacing order: {replace_response.get('error')}")
+                        print(f"[OPENING] Could not get live order details for {current_order_id} before replacing. Skipping replacement.")
                 else:
                     current_order_id = f"{run_mode}-replace-{int(time.time())}"
                     print(f"[{run_mode.upper()}] [OPENING] Simulated New Order ID: {current_order_id}")
@@ -269,25 +302,20 @@ def handle_closing_state(client, account_hash, rules, filled_opening_order):
 
     run_mode = rules.get('run_mode')
 
-    # --- External Run Mode ---
     if run_mode == 'external_run':
         print_bold(f"\n[EXTERNAL] Please place the following closing order manually:")
         print_bold(f"  ACTION: {side} {quantity} {option_type} {rules['symbol']} @ STRIKE {rules['strike']} EXP {rules['expiry']}")
         print_bold(f"  PRICE:  LIMIT @ {initial_price:.2f}")
-
         closing_start_time = time.time()
         last_suggestion_time = time.time()
         price_generator = create_price_generator(initial_price, rules['closepricefish'], rules['closepricemethod'], side)
-
         while time.time() - closing_start_time < rules['closingmaxtime']:
-            # In external mode, we check if the position is gone
             position_response = client.get_positions_by_symbol(symbol=rules['symbol'], account_hash=account_hash)
             position_closed = True
             if position_response.get('success') and position_response.get('data'):
                 accounts = position_response.get('data', {}).get('accounts', [])
                 for acc in accounts:
                     for pos in acc.get('positions', []):
-                        # Find the specific option position
                         from trading_utils import parse_option_position_details
                         pos_details = parse_option_position_details(pos)
                         if (pos_details and pos_details['put_call'] == option_type and
@@ -297,27 +325,20 @@ def handle_closing_state(client, account_hash, rules, filled_opening_order):
                             break
                     if not position_closed:
                         break
-
             if position_closed:
                 print("\n[EXTERNAL] Position has been closed successfully.")
-                # We don't have the real closing order, so we can't do a P/L summary
                 return {'status': 'CLOSED', 'order': None}
-
-            # If position not closed, check for a working order to suggest replacements for
             working_order = find_matching_order(client, account_hash, rules, option_type)
             if working_order and working_order.get('status') != 'FILLED':
                 if time.time() - last_suggestion_time > (rules['closeretrytime'] * 10):
                     new_price = next(price_generator)
                     print_bold(f"\n[EXTERNAL] Closing order has not filled. It is recommended to replace it with a new price: {new_price:.2f}")
                     last_suggestion_time = time.time()
-
             print(f"  [EXTERNAL] Waiting for user to close position...", end='\r')
             time.sleep(10)
-
         print("\n[EXTERNAL] Closing state timed out.")
         return {'status': 'TIMEOUT'}
 
-    # --- Live and Dry Run Modes ---
     if run_mode == 'live':
         order_response = client.place_option_order(
             account_id=account_hash, symbol=rules['symbol'], option_type=option_type,
@@ -356,8 +377,7 @@ def handle_closing_state(client, account_hash, rules, filled_opening_order):
             print(f"\n[DRY RUN] [CLOSING] Simulating a FILLED order.")
             fake_filled_order = {
                 'orderLegCollection': [{'instruction': side, 'quantity': quantity, 'instrument': {'putCall': option_type}}],
-                'orderActivityCollection': [{'executionLegs': [{'price': current_price, 'quantity': quantity}]}]
-            }
+                'orderActivityCollection': [{'executionLegs': [{'price': current_price, 'quantity': quantity}]}]}
             return {'status': 'CLOSED', 'order': fake_filled_order}
 
         if time.time() - last_replacement_time > rules['closeretrytime']:
@@ -367,16 +387,21 @@ def handle_closing_state(client, account_hash, rules, filled_opening_order):
                 replace_msg = f"[CLOSING] Replacing order. New details: {side} {quantity} {option_type} @ {current_price:.2f}"
                 print(f"\n{replace_msg}")
                 if run_mode == 'live':
-                    replace_response = client.replace_option_order(
-                        account_id=account_hash, order_id=current_order_id, symbol=rules['symbol'],
-                        option_type=option_type, expiration_date=rules['expiry'], strike_price=rules['strike'],
-                        quantity=quantity, side=side, order_type="LIMIT", price=current_price)
-                    if replace_response.get('success'):
-                        new_order_id = replace_response.get('data', {}).get('new_order_id')
-                        print(f"[CLOSING] Replacement successful. New Order ID: {new_order_id}")
-                        current_order_id = new_order_id
+                    live_order_details = client.get_option_order_details(account_id=account_hash, order_id=current_order_id)
+                    if live_order_details.get('success'):
+                        original_instruction = live_order_details['data']['orderLegCollection'][0]['instruction']
+                        replace_response = client.replace_option_order(
+                            account_id=account_hash, order_id=current_order_id, symbol=rules['symbol'],
+                            option_type=option_type, expiration_date=rules['expiry'], strike_price=rules['strike'],
+                            quantity=quantity, side=original_instruction, order_type="LIMIT", price=current_price)
+                        if replace_response.get('success'):
+                            new_order_id = replace_response.get('data', {}).get('new_order_id')
+                            print(f"[CLOSING] Replacement successful. New Order ID: {new_order_id}")
+                            current_order_id = new_order_id
+                        else:
+                            print(f"[CLOSING] Error replacing closing order: {replace_response.get('error')}")
                     else:
-                        print(f"[CLOSING] Error replacing closing order: {replace_response.get('error')}")
+                        print(f"[CLOSING] Could not get live order details for {current_order_id} before replacing. Skipping replacement.")
                 else:
                     current_order_id = f"{run_mode}-close-replace-{int(time.time())}"
                     print(f"[{run_mode.upper()}] [CLOSING] Simulated New Order ID: {current_order_id}")
@@ -392,10 +417,6 @@ def handle_closing_state(client, account_hash, rules, filled_opening_order):
     else:
         print(f"[{run_mode.upper()}] [CLOSING] Would have cancelled order {current_order_id}")
     return {'status': 'TIMEOUT'}
-
-def print_bold(text):
-    """Prints text in bold using ANSI escape codes."""
-    print(f"\033[1m{text}\033[0m")
 
 def handle_emergency_close(client, account_hash, rules, filled_opening_order):
     """
@@ -417,12 +438,10 @@ def handle_emergency_close(client, account_hash, rules, filled_opening_order):
 
     run_mode = rules.get('run_mode')
 
-    # --- External Run Mode ---
     if run_mode == 'external_run':
         print_bold(f"\n[EXTERNAL] Please place the following emergency order manually:")
         print_bold(f"  ACTION: {side} {quantity} {option_type} {rules['symbol']} @ STRIKE {rules['strike']} EXP {rules['expiry']}")
         print_bold(f"  PRICE:  LIMIT @ {break_even_price:.2f}")
-
         emergency_start_time = time.time()
         while time.time() - emergency_start_time < rules['emergencyclosetime']:
             position_response = client.get_positions_by_symbol(symbol=rules['symbol'], account_hash=account_hash)
@@ -446,11 +465,8 @@ def handle_emergency_close(client, account_hash, rules, filled_opening_order):
 
             print(f"  [EXTERNAL] Waiting for user to close position...", end='\r')
             time.sleep(10)
+        return {'status': 'UNCLOSED'}
 
-        # If loop finishes, timeout occurred
-        return {'status': 'UNCLOSED'} # The final warning will be printed by the caller
-
-    # --- Live and Dry Run Modes ---
     if run_mode == 'live':
         order_response = client.place_option_order(
             account_id=account_hash, symbol=rules['symbol'], option_type=option_type,
@@ -481,8 +497,7 @@ def handle_emergency_close(client, account_hash, rules, filled_opening_order):
             print(f"\n[DRY RUN] [EMERGENCY] Simulating a FILLED order.")
             fake_filled_order = {
                 'orderLegCollection': [{'instruction': side, 'quantity': quantity, 'instrument': {'putCall': option_type}}],
-                'orderActivityCollection': [{'executionLegs': [{'price': break_even_price, 'quantity': quantity}]}]
-            }
+                'orderActivityCollection': [{'executionLegs': [{'price': break_even_price, 'quantity': quantity}]}]}
             return {'status': 'CLOSED_EMERGENCY', 'order': fake_filled_order}
 
         status_msg = f"[EMERGENCY] Monitoring order {current_order_id}..."
@@ -500,27 +515,6 @@ def handle_emergency_close(client, account_hash, rules, filled_opening_order):
     print("="*60)
     return {'status': 'UNCLOSED'}
 
-def print_trade_summary(open_order, close_order):
-    """Prints a summary of the completed trade."""
-    try:
-        open_leg = open_order['orderActivityCollection'][0]['executionLegs'][0]
-        close_leg = close_order['orderActivityCollection'][0]['executionLegs'][0]
-        entry_price = open_leg['price']
-        exit_price = close_leg['price']
-        quantity = open_leg['quantity']
-        side = open_order['orderLegCollection'][0]['instruction']
-        p_l_per_contract = exit_price - entry_price if side == 'BUY_TO_OPEN' else entry_price - exit_price
-        total_p_l = p_l_per_contract * quantity * 100
-        print("\n" + "="*30)
-        print_bold("Trade Summary")
-        print(f"  Entry Price: {entry_price:.2f}")
-        print(f"  Exit Price:  {exit_price:.2f}")
-        print(f"  P/L:         ${total_p_l:.2f}")
-        print("="*30)
-    except (KeyError, IndexError, TypeError) as e:
-        print("\nCould not generate trade summary due to unexpected order format.")
-        print(f"Error: {e}")
-
 def run_bot(rules):
     """
     The main bot logic, containing the full state machine.
@@ -530,7 +524,6 @@ def run_bot(rules):
         if not account_hash:
             return
 
-        # Determine strike and expiry using the new precedence: CLI > Rules File > Dynamic
         if rules.get('strike') is None or rules.get('expiry') is None:
             print("[SETUP] Strike or expiry not found in args or rules, fetching defaults...")
             quotes_response = client.get_quotes(symbols=[rules['symbol']])
@@ -560,7 +553,6 @@ def run_bot(rules):
         retries_left = rules.get('maxflowretry', 1)
         while retries_left > 0:
             print(f"\n--- Starting Flow Attempt ({rules.get('maxflowretry', 1) - retries_left + 1}/{rules.get('maxflowretry', 1)}) ---")
-            # --- SEARCHING STATE ---
             print("[SEARCHING] Entering state")
             search_start_time = time.time()
             wait_time = rules['waitbidask']
@@ -618,14 +610,16 @@ def run_bot(rules):
                     closing_result = handle_closing_state(client, account_hash, rules, opening_result.get('order'))
                     if closing_result.get('status') == 'CLOSED':
                         print("\n[COMPLETE] TRADE COMPLETE: Closing order filled successfully!")
-                        print_trade_summary(opening_result.get('order'), closing_result.get('order'))
+                        if closing_result.get('order') is not None:
+                           print_trade_summary(opening_result.get('order'), closing_result.get('order'))
                         break
                     elif closing_result.get('status') == 'TIMEOUT':
                         print("\n[STATE_TRANSITION] Closing state timed out. Entering Emergency Close.")
                         emergency_result = handle_emergency_close(client, account_hash, rules, opening_result.get('order'))
                         if emergency_result.get('status') == 'CLOSED_EMERGENCY':
                             print("\n[COMPLETE] TRADE COMPLETE: Position closed at break-even during emergency period.")
-                            print_trade_summary(opening_result.get('order'), emergency_result.get('order'))
+                            if emergency_result.get('order') is not None:
+                                print_trade_summary(opening_result.get('order'), emergency_result.get('order'))
                         else:
                             print("\n[INCOMPLETE] BOT EXITING WITH OPEN POSITION.")
                         break
@@ -658,28 +652,9 @@ if __name__ == "__main__":
     parser.add_argument("--strike", type=float, help="The strike price. Overrides rules file.")
     parser.add_argument("--expiry", help="The expiry date (YYYY-MM-DD). Overrides rules file.")
 
-def str_to_bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="noni1aj - Automated Options Trading Bot")
-    parser.add_argument("--symbol", required=True, help="The stock symbol to trade.")
-    parser.add_argument("--rules-file", help="Path to the YAML rules file. Defaults to <symbol>-rules.yml.")
-    parser.add_argument("--strike", type=float, help="The strike price. Overrides rules file.")
-    parser.add_argument("--expiry", help="The expiry date (YYYY-MM-DD). Overrides rules file.")
-
-    # Run modes and overrides
     parser.add_argument("--dry-run", type=str_to_bool, nargs='?', const=True, default=None, help="Override dry-run mode (True/False).")
     parser.add_argument("--external-run", action="store_true", help="Suggest trades for manual execution.")
 
-    # Rule overrides
     parser.add_argument("--spread", type=float, help="Override rule: minimum bid-ask spread.")
     parser.add_argument("--waitbidask", type=int, help="Override rule: seconds to wait for a valid spread.")
     parser.add_argument("--prefer-cp", type=str, help="Override rule: prefer Call or Put (C/P).")
@@ -705,21 +680,8 @@ if __name__ == "__main__":
 
     rules_file = args.rules_file or f"{args.symbol.lower()}-rules.yml"
 
-    # Normalize case-sensitive CLI arguments before creating overrides
-    if args.prefer_cp:
-        args.prefer_cp = args.prefer_cp.upper()
-    if args.prefer_bs:
-        args.prefer_bs = args.prefer_bs.upper()
-    if args.openpricemethod:
-        args.openpricemethod = args.openpricemethod.lower()
-    if args.closepricemethod:
-        args.closepricemethod = args.closepricemethod.lower()
-
-    # Map argparse dest names to rule keys and collect overrides
     arg_to_rule_map = {
-        'prefer_cp': 'prefercp',
-        'prefer_bs': 'preferBS',
-        'dry_run': 'dry-run', # Add dry_run to the map
+        'prefer_cp': 'prefercp', 'prefer_bs': 'preferBS', 'dry_run': 'dry-run',
         'spread': 'spread', 'waitbidask': 'waitbidask', 'openingmaxtime': 'openingmaxtime',
         'maxflowretry': 'maxflowretry', 'openretrytime': 'openretrytime',
         'openpricefish': 'openpricefish', 'openpricemethod': 'openpricemethod',
@@ -735,20 +697,26 @@ if __name__ == "__main__":
 
     rules = load_and_validate_rules(rules_file, cli_overrides)
 
-    # Determine run mode with correct precedence: CLI flag > YAML setting
+    if args.prefer_cp:
+        rules['prefercp'] = args.prefer_cp.upper()
+    if args.prefer_bs:
+        rules['preferBS'] = args.prefer_bs.upper()
+    if args.openpricemethod:
+        rules['openpricemethod'] = args.openpricemethod.lower()
+    if args.closepricemethod:
+        rules['closepricemethod'] = args.closepricemethod.lower()
+
     if args.external_run:
         rules['run_mode'] = 'external_run'
         print("\n*** EXTERNAL RUN MODE ENABLED - Bot will suggest trades for manual execution. ***\n")
-    elif rules.get('dry-run', False): # Use the final, overridden value
+    elif rules.get('dry-run', False):
         rules['run_mode'] = 'dry_run'
         print("\n*** DRY RUN MODE ENABLED - Simulating trades with random outcomes. ***\n")
     else:
         rules['run_mode'] = 'live'
 
-    # Pass essential args into the rules dict for easier access
     rules['symbol'] = args.symbol
     rules['strike'] = args.strike
     rules['expiry'] = args.expiry
 
-    # Initialize the bot's main logic
     run_bot(rules)
